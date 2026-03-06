@@ -1,0 +1,545 @@
+---
+title: "Script Configuration Options"
+description: "Complete reference for all configurable options in the Dedalus conda installation scripts"
+---
+
+## Overview
+
+Both `conda_install_dedalus2.sh` and `conda_install_dedalus3.sh` share the same configuration options. These options are defined as shell variables at the top of each script and control the installation behavior, dependencies, and environment configuration.
+
+## Configuration Variables
+
+### Environment Options
+
+<ParamField path="CONDA_ENV" type="string" default="dedalus2" required>
+  Name of the conda environment to create or update.
+  
+  **Default values:**
+  - `dedalus2` for v2 script
+  - `dedalus3` for v3 script
+  
+  **Example:**
+  ```bash
+  CONDA_ENV="my_dedalus_env"
+  ```
+</ParamField>
+
+<ParamField path="CONDA_YES" type="integer" default="1">
+  Skip conda prompts by automatically confirming all operations.
+  
+  **Values:**
+  - `1`: Skip prompts (pass `-y` flag to conda)
+  - `0`: Prompt for confirmation
+  
+  **Example:**
+  ```bash
+  CONDA_YES=0  # Prompt before each installation step
+  ```
+</ParamField>
+
+<ParamField path="CONDA_QUIET" type="integer" default="1">
+  Suppress verbose conda output during installation.
+  
+  **Values:**
+  - `1`: Quiet output (pass `-q` flag to conda)
+  - `0`: Verbose output
+  
+  **Example:**
+  ```bash
+  CONDA_QUIET=0  # Show detailed conda output
+  ```
+</ParamField>
+
+### MPI Configuration
+
+<ParamField path="INSTALL_MPI" type="integer" default="1">
+  Control whether to install OpenMPI from conda or use a custom MPI installation.
+  
+  **Values:**
+  - `1`: Install OpenMPI from conda-forge
+  - `0`: Use custom MPI (requires `MPI_PATH` to be set)
+  
+  **Conda installation includes:**
+  - conda-forge compilers
+  - OpenMPI library
+  - openmpi-mpicc wrapper
+  - mpi4py Python bindings
+  
+  **Example:**
+  ```bash
+  INSTALL_MPI=1  # Use conda OpenMPI
+  ```
+</ParamField>
+
+<ParamField path="MPI_PATH" type="string">
+  Path to custom MPI installation prefix. Required when `INSTALL_MPI=0`.
+  
+  The path should point to the MPI installation root directory containing `bin/`, `lib/`, and `include/` subdirectories.
+  
+  **Example:**
+  ```bash
+  INSTALL_MPI=0
+  export MPI_PATH=/usr/local/openmpi-4.1.4
+  ```
+  
+  The script will add `${MPI_PATH}/bin` to PATH and use it to build mpi4py.
+</ParamField>
+
+<Note>
+  When using custom MPI, ensure the MPI compiler wrappers (`mpicc`, `mpicxx`, `mpifort`) are in `${MPI_PATH}/bin`.
+</Note>
+
+### FFTW Configuration
+
+<ParamField path="INSTALL_FFTW" type="integer" default="1">
+  Control whether to install FFTW from conda or use a custom FFTW installation.
+  
+  **Values:**
+  - `1`: Install FFTW from conda-forge
+  - `0`: Use custom FFTW (requires `FFTW_PATH` to be set)
+  
+  **Conda installation:**
+  The script installs FFTW with OpenMPI support using `--no-deps` to avoid pulling unnecessary dependencies:
+  ```bash
+  conda install --no-deps "fftw=*=*openmpi*"
+  ```
+  
+  **Example:**
+  ```bash
+  INSTALL_FFTW=1  # Use conda FFTW
+  ```
+</ParamField>
+
+<ParamField path="FFTW_PATH" type="string">
+  Path to custom FFTW installation prefix. Required when `INSTALL_FFTW=0`.
+  
+  The path should point to the FFTW installation root directory containing `lib/` and `include/` subdirectories.
+  
+  **Example:**
+  ```bash
+  INSTALL_FFTW=0
+  export FFTW_PATH=/usr/local/fftw-3.3.10
+  ```
+</ParamField>
+
+<Warning>
+  FFTW from conda is built with OpenMPI support and may not work correctly with custom MPIs that are not OpenMPI-compatible.
+</Warning>
+
+### HDF5 Configuration
+
+<ParamField path="INSTALL_HDF5" type="integer" default="1">
+  Control whether to install HDF5 from conda or use a custom HDF5 installation.
+  
+  **Values:**
+  - `1`: Install HDF5 from conda-forge
+  - `0`: Use custom HDF5 (requires `HDF5_DIR` to be set)
+  
+  **Conda installation behavior:**
+  - If `INSTALL_MPI=1`: Installs parallel HDF5 (`hdf5=*=mpi*`, `h5py=*=mpi*`)
+  - If `INSTALL_MPI=0`: Installs serial HDF5 (`hdf5=*=nompi*`, `h5py=*=nompi*`)
+  
+  **Example:**
+  ```bash
+  INSTALL_HDF5=1  # Use conda HDF5
+  ```
+</ParamField>
+
+<ParamField path="HDF5_DIR" type="string">
+  Path to custom HDF5 installation prefix. Required when `INSTALL_HDF5=0`.
+  
+  The path should point to the HDF5 installation root directory containing `lib/` and `include/` subdirectories.
+  
+  **Example:**
+  ```bash
+  INSTALL_HDF5=0
+  export HDF5_DIR=/usr/local/hdf5-1.14.0
+  export HDF5_MPI="ON"  # If HDF5 has parallel support
+  ```
+</ParamField>
+
+<ParamField path="HDF5_MPI" type="string">
+  Indicate whether custom HDF5 installation has parallel (MPI) support. Only relevant when `INSTALL_HDF5=0`.
+  
+  **Values:**
+  - `"ON"`: HDF5 built with parallel/MPI support
+  - Not set or `"OFF"`: HDF5 built without MPI support
+  
+  **Impact on h5py installation:**
+  - If `HDF5_MPI="ON"`: Builds h5py with `CC=mpicc` for parallel support
+  - Otherwise: Builds h5py without MPI support
+  
+  **Example:**
+  ```bash
+  INSTALL_HDF5=0
+  export HDF5_DIR=/opt/hdf5-parallel
+  export HDF5_MPI="ON"
+  ```
+</ParamField>
+
+<Note>
+  HDF5 from conda will only have parallel support if MPI is also installed from conda (`INSTALL_MPI=1`).
+</Note>
+
+### BLAS Configuration
+
+<ParamField path="BLAS" type="string" default="openblas" required>
+  Choose the BLAS/LAPACK implementation for numpy and scipy.
+  
+  **Values:**
+  - `"openblas"`: Use OpenBLAS (open-source, generally good performance)
+  - `"mkl"`: Use Intel Math Kernel Library (optimized for Intel CPUs)
+  
+  **Effects:**
+  
+  **OpenBLAS:**
+  - Installs `libblas=*=*openblas`
+  - Sets `FFTW_STATIC=0` (dynamic linking)
+  - On Apple Silicon with arm64 builds, pins `libopenblas<0.3.20` to avoid `ggev` errors
+  
+  **MKL:**
+  - Installs `libblas=*=*mkl`
+  - Sets `FFTW_STATIC=1` (static linking to avoid symbol conflicts)
+  - May provide better performance on Intel processors
+  
+  **Example:**
+  ```bash
+  BLAS="openblas"  # Use OpenBLAS
+  ```
+  
+  ```bash
+  BLAS="mkl"  # Use Intel MKL
+  ```
+</ParamField>
+
+### Python Configuration
+
+<ParamField path="PYTHON_VERSION" type="string" default="3.12">
+  Python version to install in the conda environment.
+  
+  **Supported versions:**
+  Any Python 3.x version supported by conda-forge (typically 3.8+).
+  
+  **Example:**
+  ```bash
+  PYTHON_VERSION="3.11"  # Install Python 3.11
+  ```
+  
+  ```bash
+  PYTHON_VERSION="3.10"  # Install Python 3.10
+  ```
+</ParamField>
+
+<Info>
+  Dedalus requires Python 3.8 or newer. Check the Dedalus documentation for specific version requirements.
+</Info>
+
+### Apple Silicon Configuration
+
+<ParamField path="APPLE_SILICON_BUILD_ARM" type="integer" default="0">
+  Control architecture for Apple Silicon (M1/M2/M3) Macs.
+  
+  **Values:**
+  - `0`: Use x86_64 packages via Rosetta 2 emulation (`osx-64`)
+  - `1`: Use native arm64 packages (`osx-arm64`)
+  
+  **Behavior:**
+  
+  This flag only has an effect on Apple Silicon machines (Darwin + arm64). On all other platforms, it is automatically set to 0.
+  
+  **x86_64 mode (default):**
+  - Better compatibility with scientific libraries
+  - Uses Rosetta 2 translation (minimal performance impact)
+  - Sets `CONDA_SUBDIR=osx-64`
+  
+  **arm64 mode:**
+  - Native Apple Silicon performance
+  - May have compatibility issues with some packages
+  - Automatically pins `libopenblas<0.3.20` when using OpenBLAS to avoid numerical errors
+  
+  **Example:**
+  ```bash
+  APPLE_SILICON_BUILD_ARM=0  # Use x86_64 (recommended)
+  ```
+  
+  ```bash
+  APPLE_SILICON_BUILD_ARM=1  # Use native arm64
+  ```
+</ParamField>
+
+<Warning>
+  Native arm64 builds may exhibit numerical errors in certain linear algebra operations, particularly with OpenBLAS versions >= 0.3.20. The x86_64 mode via Rosetta 2 is recommended for production work.
+</Warning>
+
+## Example Configurations
+
+### Standard Installation with Conda Packages
+
+```bash
+# Use all conda-forge packages with OpenBLAS
+CONDA_ENV="dedalus2"
+CONDA_YES=1
+CONDA_QUIET=1
+INSTALL_MPI=1
+INSTALL_FFTW=1
+INSTALL_HDF5=1
+BLAS="openblas"
+PYTHON_VERSION="3.12"
+APPLE_SILICON_BUILD_ARM=0
+```
+
+### Custom MPI with Conda FFTW and HDF5
+
+```bash
+# Use custom OpenMPI, conda FFTW and HDF5
+CONDA_ENV="dedalus_custom_mpi"
+CONDA_YES=1
+CONDA_QUIET=1
+INSTALL_MPI=0
+export MPI_PATH=/usr/local/openmpi
+INSTALL_FFTW=1
+INSTALL_HDF5=1
+BLAS="openblas"
+PYTHON_VERSION="3.12"
+APPLE_SILICON_BUILD_ARM=0
+```
+
+<Note>
+  When using custom MPI with conda FFTW, ensure your MPI is OpenMPI-compatible since conda FFTW is built with OpenMPI.
+</Note>
+
+### Fully Custom Dependencies
+
+```bash
+# Use all custom MPI, FFTW, and HDF5
+CONDA_ENV="dedalus_custom"
+CONDA_YES=1
+CONDA_QUIET=0  # Show detailed output for debugging
+INSTALL_MPI=0
+export MPI_PATH=/opt/custom/openmpi-4.1.5
+INSTALL_FFTW=0
+export FFTW_PATH=/opt/custom/fftw-3.3.10
+INSTALL_HDF5=0
+export HDF5_DIR=/opt/custom/hdf5-1.14.0
+export HDF5_MPI="ON"
+BLAS="openblas"
+PYTHON_VERSION="3.11"
+APPLE_SILICON_BUILD_ARM=0
+```
+
+### Intel MKL Configuration
+
+```bash
+# Use Intel MKL for BLAS
+CONDA_ENV="dedalus_mkl"
+CONDA_YES=1
+CONDA_QUIET=1
+INSTALL_MPI=1
+INSTALL_FFTW=1
+INSTALL_HDF5=1
+BLAS="mkl"  # Use Intel MKL
+PYTHON_VERSION="3.12"
+APPLE_SILICON_BUILD_ARM=0
+```
+
+<Info>
+  When using MKL, the script automatically sets `FFTW_STATIC=1` to statically link FFTW, avoiding symbol conflicts between MKL and FFTW.
+</Info>
+
+### Apple Silicon Native Build
+
+```bash
+# Native arm64 build on Apple Silicon
+CONDA_ENV="dedalus_arm64"
+CONDA_YES=1
+CONDA_QUIET=1
+INSTALL_MPI=1
+INSTALL_FFTW=1
+INSTALL_HDF5=1
+BLAS="openblas"
+PYTHON_VERSION="3.12"
+APPLE_SILICON_BUILD_ARM=1  # Use native arm64
+```
+
+### Verbose Installation for Debugging
+
+```bash
+# Show all prompts and output for troubleshooting
+CONDA_ENV="dedalus_debug"
+CONDA_YES=0  # Prompt before each step
+CONDA_QUIET=0  # Show verbose output
+INSTALL_MPI=1
+INSTALL_FFTW=1
+INSTALL_HDF5=1
+BLAS="openblas"
+PYTHON_VERSION="3.12"
+APPLE_SILICON_BUILD_ARM=0
+```
+
+## Environment Variables Set by Script
+
+In addition to the configuration options, the script sets several environment variables during installation:
+
+### During Installation
+
+<ParamField path="PYTHONNOUSERSITE" type="string" default="1">
+  Prevents Python from adding user site-packages directory to `sys.path`.
+  ```bash
+  export PYTHONNOUSERSITE=1
+  ```
+</ParamField>
+
+<ParamField path="PYTHONPATH" type="string">
+  Unset to ensure a clean Python environment without interference from system packages.
+  ```bash
+  unset PYTHONPATH
+  ```
+</ParamField>
+
+<ParamField path="FFTW_STATIC" type="string">
+  Automatically set based on BLAS choice:
+  - `0` for OpenBLAS (dynamic linking)
+  - `1` for MKL (static linking)
+  ```bash
+  export FFTW_STATIC=0  # or 1
+  ```
+</ParamField>
+
+<ParamField path="PATH" type="string">
+  When using custom MPI, the script prepends `${MPI_PATH}/bin` to PATH:
+  ```bash
+  export PATH=${MPI_PATH}/bin:${PATH}
+  ```
+</ParamField>
+
+<ParamField path="CC" type="string" default="mpicc">
+  Set to `mpicc` when installing mpi4py, h5py, and Dedalus to ensure proper MPI linking:
+  ```bash
+  CC=mpicc pip install ...
+  ```
+</ParamField>
+
+<ParamField path="CONDA_SUBDIR" type="string">
+  On Apple Silicon with `APPLE_SILICON_BUILD_ARM=0`, sets architecture to x86_64:
+  ```bash
+  CONDA_SUBDIR=osx-64 conda create ...
+  ```
+</ParamField>
+
+### Persistent Environment Variables
+
+These are saved to the conda environment and active whenever the environment is activated:
+
+<ParamField path="OMP_NUM_THREADS" type="string" default="1">
+  Disables OpenMP threading by default to avoid oversubscription in MPI jobs.
+  ```bash
+  conda env config vars set OMP_NUM_THREADS=1
+  ```
+</ParamField>
+
+<ParamField path="NUMEXPR_MAX_THREADS" type="string" default="1">
+  Limits NumExpr threads to prevent performance issues with MPI.
+  ```bash
+  conda env config vars set NUMEXPR_MAX_THREADS=1
+  ```
+</ParamField>
+
+## Validation and Error Checking
+
+The scripts perform several validation checks before installation:
+
+### Required Environment Check
+
+```bash
+if [ "${CONDA_DEFAULT_ENV}" != "base" ]; then
+    echo "ERROR: Conda base environment must be activated"
+    exit 1
+fi
+```
+
+### Custom Path Validation
+
+When using custom installations (`INSTALL_*=0`), the corresponding path variable must be set:
+
+```bash
+if [ ${INSTALL_MPI} -ne 1 ]; then
+    if [ -z ${MPI_PATH} ]; then
+        echo "ERROR: MPI_PATH must be set"
+        exit 1
+    fi
+fi
+```
+
+Similar checks are performed for `FFTW_PATH` and `HDF5_DIR`.
+
+### Platform Detection
+
+```bash
+if [ $(uname -s) == "Darwin" ] && [ $(uname -m) == "arm64" ]; then
+    ON_APPLE_SILICON=1
+else
+    ON_APPLE_SILICON=0
+    APPLE_SILICON_BUILD_ARM=0
+fi
+```
+
+### BLAS Validation
+
+```bash
+case "${BLAS}" in
+    "openblas") ... ;;
+    "mkl") ... ;;
+    *)
+        echo "ERROR: BLAS must be 'openblas' or 'mkl'"
+        exit 1
+    ;;
+esac
+```
+
+## Modifying Options
+
+To customize the installation, edit the configuration section at the top of the script before running it:
+
+<Steps>
+  <Step title="Download Script">
+    ```bash
+    wget https://raw.githubusercontent.com/DedalusProject/dedalus/master/conda_install_dedalus2.sh
+    ```
+  </Step>
+
+  <Step title="Edit Configuration">
+    Open the script in a text editor and modify the options section (lines 10-43):
+    ```bash
+    nano conda_install_dedalus2.sh
+    ```
+  </Step>
+
+  <Step title="Make Executable">
+    ```bash
+    chmod +x conda_install_dedalus2.sh
+    ```
+  </Step>
+
+  <Step title="Run Script">
+    ```bash
+    conda activate base
+    ./conda_install_dedalus2.sh
+    ```
+  </Step>
+</Steps>
+
+Alternatively, you can set environment variables before running the script:
+
+```bash
+# Set environment variables
+export CONDA_ENV="my_custom_env"
+export PYTHON_VERSION="3.11"
+export BLAS="mkl"
+
+# Run script (note: internal script variables won't be affected)
+# Edit the script directly for this approach
+```
+
+<Note>
+  Environment variables set before running the script only affect variables explicitly exported in the script (like `MPI_PATH`, `FFTW_PATH`, `HDF5_DIR`). Internal script variables must be edited within the script file itself.
+</Note>

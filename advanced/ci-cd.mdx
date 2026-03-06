@@ -1,0 +1,490 @@
+---
+title: CI/CD Workflows
+description: Documentation of the GitHub Actions workflows that continuously test Dedalus conda builds
+---
+
+## Overview
+
+The Dedalus conda builds repository uses GitHub Actions to continuously test multiple installation methods across different platforms. The workflow runs nightly and on every push to ensure installation scripts remain functional.
+
+**Workflow File:** `.github/workflows/test_conda_builds.yml`
+
+## Workflow Triggers
+
+The CI/CD pipeline runs on:
+
+```yaml
+on:
+  push:
+    branches:
+      - '*'  # All branches
+  pull_request:
+    branches:
+      - '*'  # All PRs
+  schedule:
+    - cron: '0 0 * * *'  # Daily at midnight UTC
+  workflow_dispatch:  # Manual trigger
+```
+
+<Info>
+The nightly schedule ensures that builds are tested against the latest conda-forge packages and upstream Dedalus changes.
+</Info>
+
+## Test Matrix
+
+The workflow tests 5 different installation scenarios across 2 platforms:
+
+### Platforms Tested
+
+- **Linux (x86_64)**: `ubuntu-latest`
+- **macOS (x86_64)**: `macos-latest`
+
+<Note>
+Apple Silicon (arm64) is not tested in CI due to GitHub Actions runner limitations. The scripts support Apple Silicon via Rosetta 2 emulation (x86_64 mode).
+</Note>
+
+### Installation Scenarios
+
+<Accordion title="1. Dedalus v2 from conda-forge">
+
+**Job Name:** `v2_from_conda_forge`
+
+**What it tests:**
+- Direct installation of the stable Dedalus v2 package from conda-forge
+- Most straightforward installation method
+- Recommended for users who don't need the latest development features
+
+**Installation steps:**
+```bash
+conda create -y -n dedalus2
+conda activate dedalus2
+conda env config vars set OMP_NUM_THREADS=1
+conda env config vars set NUMEXPR_MAX_THREADS=1
+conda install -y -c conda-forge dedalus
+```
+
+**Validation:**
+```bash
+python3 -m dedalus test
+```
+
+</Accordion>
+
+<Accordion title="2. Dedalus v2-master via conda-forge">
+
+**Job Name:** `v2_master_via_conda_forge`
+
+**What it tests:**
+- Installing development version of Dedalus v2 branch from GitHub
+- Uses conda-forge for dependencies, pip for Dedalus itself
+- Tests compilation against conda-forge MPI/HDF5/FFTW
+
+**Installation steps:**
+```bash
+conda create -y -n dedalus2
+conda activate dedalus2
+conda env config vars set OMP_NUM_THREADS=1
+conda env config vars set NUMEXPR_MAX_THREADS=1
+# Install dependencies from conda-forge
+conda install -y -c conda-forge dedalus c-compiler cython "h5py=*=mpi*" setuptools
+# Remove the conda dedalus package
+conda uninstall -y --force dedalus
+# Install latest v2_master from GitHub
+CC=mpicc pip3 install --no-cache --no-build-isolation \
+  http://github.com/dedalusproject/dedalus/zipball/v2_master/
+```
+
+**Key points:**
+- `CC=mpicc` ensures proper MPI compiler usage
+- `--no-cache` prevents using cached wheels
+- `--no-build-isolation` uses environment dependencies
+- `"h5py=*=mpi*"` ensures parallel HDF5 support
+
+</Accordion>
+
+<Accordion title="3. Dedalus v3-master via conda-forge">
+
+**Job Name:** `v3_master_via_conda_forge`
+
+**What it tests:**
+- Installing development version of Dedalus v3 (current main branch)
+- Same approach as v2-master but tracks the latest version
+- Tests compatibility with conda-forge dependency stack
+
+**Installation steps:**
+```bash
+conda create -y -n dedalus3
+conda activate dedalus3
+conda env config vars set OMP_NUM_THREADS=1
+conda env config vars set NUMEXPR_MAX_THREADS=1
+conda install -y -c conda-forge dedalus c-compiler cython "h5py=*=mpi*" setuptools
+conda uninstall -y --force dedalus
+CC=mpicc pip3 install --no-cache --no-build-isolation \
+  http://github.com/dedalusproject/dedalus/zipball/master/
+```
+
+**Differences from v2-master:**
+- Uses `master` branch instead of `v2_master`
+- Creates `dedalus3` environment
+- Tests the latest Dedalus features and API
+
+</Accordion>
+
+<Accordion title="4. Dedalus v2 custom script">
+
+**Job Name:** `v2_custom`
+
+**What it tests:**
+- The `conda_install_dedalus2.sh` script from this repository
+- Default configuration (all dependencies from conda-forge)
+- Ensures the user-facing script works correctly
+
+**Installation steps:**
+```bash
+# Checkout this repository first
+bash conda_install_dedalus2.sh
+```
+
+**What the script does:**
+- Creates new conda environment
+- Installs Python 3.12, numpy, scipy with OpenBLAS
+- Installs OpenMPI, mpi4py, FFTW, HDF5
+- Installs Dedalus v2 via pip
+- Configures threading environment variables
+
+</Accordion>
+
+<Accordion title="5. Dedalus v3 custom script">
+
+**Job Name:** `v3_custom`
+
+**What it tests:**
+- The `conda_install_dedalus3.sh` script from this repository
+- Same as v2 custom but installs Dedalus v3
+- Most common installation method for users
+
+**Installation steps:**
+```bash
+bash conda_install_dedalus3.sh
+```
+
+**Differences from v2 script:**
+- Creates `dedalus3` environment
+- Installs from `master` branch instead of tagged release
+
+</Accordion>
+
+## Common Test Infrastructure
+
+### Miniforge Setup
+
+All jobs use the same conda setup:
+
+```yaml
+- name: Setup miniforge
+  uses: conda-incubator/setup-miniconda@v2
+  with:
+    miniforge-version: latest
+    auto-activate-base: true
+    activate-environment: ""
+```
+
+**Why Miniforge?**
+- Lightweight conda distribution
+- Uses conda-forge by default
+- Faster than full Anaconda in CI environments
+
+### Shell Configuration
+
+All build and test steps use:
+
+```yaml
+shell: bash -l {0}
+```
+
+**Why?**
+- `-l` creates a login shell, ensuring conda initialization
+- Properly sources `.bashrc` and conda configuration
+- Required for `conda activate` to work
+
+### Test Validation
+
+Every job validates the installation with:
+
+```bash
+python3 -m dedalus test
+```
+
+This runs Dedalus's built-in test suite, which:
+- Verifies all modules import correctly
+- Tests basic mathematical operations
+- Validates MPI functionality
+- Checks FFTW and HDF5 integration
+
+## Failure Handling
+
+### Fail-Fast Strategy
+
+```yaml
+strategy:
+  fail-fast: false
+```
+
+All jobs use `fail-fast: false` to:
+- Continue testing all platforms even if one fails
+- Identify platform-specific issues
+- Provide comprehensive failure information
+
+### When Builds Fail
+
+Common failure scenarios:
+
+<Steps>
+
+### Dependency Resolution Failure
+
+**Symptom:** Conda cannot resolve package dependencies
+
+**Common causes:**
+- New incompatible package version on conda-forge
+- Missing package builds for a platform
+- Conflicting version requirements
+
+**Response:**
+- Check conda-forge feedstock status
+- May require pinning problematic package versions
+- Update scripts to accommodate dependency changes
+
+### Test Suite Failure
+
+**Symptom:** Installation succeeds but `python3 -m dedalus test` fails
+
+**Common causes:**
+- Upstream Dedalus bug in development branch
+- Incompatible library version
+- Platform-specific numerical issues
+
+**Response:**
+- Check Dedalus issue tracker
+- Verify on local system
+- Report to Dedalus developers if reproducible
+
+### Compilation Failure
+
+**Symptom:** `pip install` fails during Cython compilation
+
+**Common causes:**
+- Compiler version incompatibility
+- Missing build dependencies
+- MPI linking issues
+
+**Response:**
+- Check compiler versions in CI logs
+- Verify MPI is properly configured
+- May require updating build flags
+
+</Steps>
+
+## Monitoring CI Status
+
+### Viewing Workflow Runs
+
+1. Navigate to the repository on GitHub
+2. Click the **Actions** tab
+3. Select **Test conda builds** workflow
+4. View recent runs and their status
+
+### Build Badges
+
+Add a status badge to README:
+
+```markdown
+![Test conda builds](https://github.com/username/repo/workflows/Test%20conda%20builds/badge.svg)
+```
+
+### Notifications
+
+GitHub Actions automatically:
+- Sends email on workflow failures (to commit authors)
+- Posts status checks on pull requests
+- Updates workflow status on the Actions page
+
+## Local Testing
+
+You can replicate CI tests locally:
+
+<CodeGroup>
+
+```bash Test v2 from conda-forge
+conda create -y -n dedalus2-test
+conda activate dedalus2-test
+conda env config vars set OMP_NUM_THREADS=1
+conda env config vars set NUMEXPR_MAX_THREADS=1
+conda install -y -c conda-forge dedalus
+python3 -m dedalus test
+```
+
+```bash Test v3 custom script
+# Ensure you're in base environment
+conda activate base
+
+# Run the script
+bash conda_install_dedalus3.sh
+
+# Test
+conda activate dedalus3
+python3 -m dedalus test
+```
+
+```bash Test development version
+conda create -y -n dedalus-dev
+conda activate dedalus-dev
+conda env config vars set OMP_NUM_THREADS=1
+conda env config vars set NUMEXPR_MAX_THREADS=1
+conda install -y -c conda-forge dedalus c-compiler cython "h5py=*=mpi*" setuptools
+conda uninstall -y --force dedalus
+CC=mpicc pip3 install --no-cache --no-build-isolation \
+  http://github.com/dedalusproject/dedalus/zipball/master/
+python3 -m dedalus test
+```
+
+</CodeGroup>
+
+## Manual Workflow Dispatch
+
+You can manually trigger the workflow:
+
+<Steps>
+
+### Navigate to Actions Tab
+
+Go to repository **Actions** tab on GitHub
+
+### Select Workflow
+
+Click **Test conda builds** in the left sidebar
+
+### Run Workflow
+
+Click **Run workflow** button
+
+### Select Branch
+
+Choose the branch to test (default: main)
+
+### Start Workflow
+
+Click **Run workflow** to start the tests
+
+</Steps>
+
+<Info>
+Manual triggers are useful for:
+- Testing changes before merging
+- Re-running failed builds
+- Verifying fixes to CI issues
+</Info>
+
+## Extending the Workflow
+
+### Adding New Test Scenarios
+
+To add a new test job:
+
+```yaml
+new_test_job:
+  strategy:
+    fail-fast: false
+    matrix:
+      include:
+        - os: ubuntu-latest
+          label: linux-64
+        - os: macos-latest
+          label: osx-64
+  name: New test on ${{ matrix.label }}
+  runs-on: ${{ matrix.os }}
+  steps:
+    - name: Setup miniforge
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        miniforge-version: latest
+        auto-activate-base: true
+        activate-environment: ""
+    - name: Build
+      shell: bash -l {0}
+      run: |
+        # Your installation commands
+    - name: Test
+      shell: bash -l {0}
+      run: |
+        # Your test commands
+```
+
+### Testing Custom Library Configurations
+
+CI currently only tests default (conda-forge) configurations. Custom library tests would require:
+
+- Installing system MPI packages in CI
+- Configuring library paths
+- Platform-specific setup
+
+**Example for Ubuntu:**
+
+```yaml
+- name: Install system MPI
+  run: |
+    sudo apt-get update
+    sudo apt-get install -y libopenmpi-dev
+
+- name: Run custom build
+  shell: bash -l {0}
+  run: |
+    export MPI_PATH=/usr
+    # Edit script to use custom MPI
+    sed -i 's/INSTALL_MPI=1/INSTALL_MPI=0/' conda_install_dedalus3.sh
+    bash conda_install_dedalus3.sh
+```
+
+## Best Practices
+
+<Steps>
+
+### Keep Scripts Simple
+
+- Minimize platform-specific logic
+- Use conda's cross-platform features
+- Document any platform workarounds
+
+### Pin Critical Versions
+
+Consider pinning when packages cause issues:
+
+```bash
+# Example: Pin openblas on Apple Silicon
+if [ ${APPLE_SILICON_BUILD_ARM} -eq 1 ]; then
+    conda install "libopenblas<0.3.20"
+fi
+```
+
+### Test Locally First
+
+Before pushing changes:
+
+1. Test scripts on your platform
+2. Verify clean environment installation
+3. Run `python3 -m dedalus test`
+
+### Monitor CI Regularly
+
+Check CI status:
+- After pushing changes
+- Weekly for nightly runs
+- When conda-forge has major updates
+
+</Steps>
+
+## Related Resources
+
+- [Troubleshooting](/advanced/troubleshooting) - Common CI and installation issues
+- [Custom Libraries](/advanced/custom-libraries) - Advanced configuration options
+- [GitHub Actions Documentation](https://docs.github.com/en/actions) - General CI/CD info

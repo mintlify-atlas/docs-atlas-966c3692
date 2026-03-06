@@ -1,0 +1,463 @@
+---
+title: Installation Methods
+description: Compare conda-forge and custom build scripts to choose the best installation method for your environment
+---
+
+## Overview
+
+There are two primary approaches to installing Dedalus with Conda:
+
+1. **conda-forge packages**: Pre-built binaries for standard configurations
+2. **Custom build scripts**: Flexible builds with system-specific library linking
+
+This guide helps you choose the right method for your use case.
+
+## conda-forge Installation
+
+### What It Provides
+
+The [Dedalus feedstock on conda-forge](https://github.com/conda-forge/dedalus-feedstock) provides pre-built packages with:
+
+- **Dedalus v2** (latest stable release)
+- **OpenMPI** support from conda-forge
+- **Parallel HDF5** built against OpenMPI
+- **FFTW** from conda-forge
+- **NumPy/SciPy** with OpenBLAS
+
+### Supported Platforms
+
+- Linux (x86_64)
+- macOS (x86_64)
+
+<Info>
+The conda-forge builds support both MPICH and OpenMPI variants. The default installation uses OpenMPI.
+</Info>
+
+### Installation Command
+
+```bash
+conda create -y -n dedalus2
+conda activate dedalus2
+conda install -y -c conda-forge dedalus
+```
+
+### When to Use conda-forge
+
+Choose conda-forge installation when:
+
+<CardGroup cols={2}>
+  <Card title="Quick Setup" icon="bolt">
+    You need the fastest path to a working installation without configuration
+  </Card>
+  <Card title="Standard Hardware" icon="laptop">
+    You're on a laptop or workstation with no special library requirements
+  </Card>
+  <Card title="Development Work" icon="code">
+    You're developing Dedalus-based applications and need a stable baseline
+  </Card>
+  <Card title="Teaching" icon="graduation-cap">
+    You're setting up environments for students or workshops
+  </Card>
+</CardGroup>
+
+### Limitations
+
+<Warning>
+conda-forge builds cannot link to custom system libraries. If your cluster requires specific MPI, FFTW, or HDF5 installations, use the custom build scripts instead.
+</Warning>
+
+## Custom Build Scripts
+
+### What They Provide
+
+The custom build scripts (`conda_install_dedalus2.sh` and `conda_install_dedalus3.sh`) offer:
+
+- **Custom MPI linking**: Use system-installed MPI (MPICH, Intel MPI, Cray MPICH, etc.)
+- **Custom FFTW**: Link to hardware-optimized FFTW builds
+- **Custom HDF5**: Use cluster-specific parallel HDF5 installations
+- **BLAS selection**: Choose between OpenBLAS or Intel MKL
+- **Development versions**: Install Dedalus v3 from the master branch
+
+### Configuration Options
+
+The scripts expose configuration variables at the top of each file:
+
+```bash
+# Conda environment name
+CONDA_ENV="dedalus2"
+
+# Install OpenMPI from conda (1) or use custom MPI (0)
+INSTALL_MPI=1
+# export MPI_PATH=/path/to/custom/mpi
+
+# Install FFTW from conda (1) or use custom FFTW (0)
+INSTALL_FFTW=1
+# export FFTW_PATH=/path/to/custom/fftw
+
+# Install HDF5 from conda (1) or use custom HDF5 (0)
+INSTALL_HDF5=1
+# export HDF5_DIR=/path/to/custom/hdf5
+# export HDF5_MPI="ON"
+
+# BLAS options: "openblas" or "mkl"
+BLAS="openblas"
+
+# Python version
+PYTHON_VERSION="3.12"
+```
+
+### When to Use Custom Builds
+
+Choose custom build scripts when:
+
+<CardGroup cols={2}>
+  <Card title="HPC Clusters" icon="server">
+    You're on a supercomputer with optimized system libraries
+  </Card>
+  <Card title="Custom MPI" icon="network-wired">
+    You need to use Intel MPI, Cray MPICH, or other MPI implementations
+  </Card>
+  <Card title="Performance Tuning" icon="gauge-high">
+    You want to use Intel MKL or hardware-specific FFTW builds
+  </Card>
+  <Card title="Development" icon="flask">
+    You're testing Dedalus v3 or contributing to Dedalus development
+  </Card>
+</CardGroup>
+
+## Comparison Matrix
+
+| Feature | conda-forge | Custom Build Scripts |
+|---------|-------------|---------------------|
+| **Installation Speed** | Fast (pre-built) | Slower (builds Dedalus) |
+| **Configuration** | None required | Extensive options |
+| **MPI Support** | OpenMPI only | Any MPI implementation |
+| **FFTW** | conda-forge version | System or conda-forge |
+| **HDF5** | conda-forge parallel | System or conda-forge |
+| **BLAS** | OpenBLAS | OpenBLAS or Intel MKL |
+| **Dedalus Versions** | v2 stable only | v2 stable or v3 development |
+| **Platform Support** | Linux, macOS x86 | Linux, macOS x86, macOS ARM |
+| **Cluster Optimization** | Limited | Full control |
+
+## Detailed Configuration Examples
+
+### Example 1: Full conda-forge Stack
+
+The simplest configuration uses all conda-forge packages:
+
+```bash conda_install_dedalus2.sh
+INSTALL_MPI=1
+INSTALL_FFTW=1
+INSTALL_HDF5=1
+BLAS="openblas"
+```
+
+This is functionally similar to the conda-forge installation but gives you control over Python version and BLAS library.
+
+### Example 2: Custom MPI with conda-forge FFTW/HDF5
+
+On clusters with optimized MPI but standard FFTW/HDF5:
+
+```bash conda_install_dedalus2.sh
+INSTALL_MPI=0
+export MPI_PATH=/opt/intel/mpi/latest
+
+INSTALL_FFTW=1
+INSTALL_HDF5=1
+BLAS="openblas"
+```
+
+<Note>
+When using custom MPI, `mpicc` must be in your PATH or explicitly set via `MPI_PATH`.
+</Note>
+
+### Example 3: Full Custom Stack (HPC)
+
+On HPC systems with all libraries provided by modules:
+
+```bash conda_install_dedalus2.sh
+INSTALL_MPI=0
+export MPI_PATH=/opt/cray/pe/mpt/default
+
+INSTALL_FFTW=0
+export FFTW_PATH=/opt/fftw/3.3.10
+
+INSTALL_HDF5=0
+export HDF5_DIR=/opt/hdf5/1.14.0
+export HDF5_MPI="ON"
+
+BLAS="mkl"
+```
+
+This configuration:
+- Uses Cray MPI from the system
+- Links to hardware-optimized FFTW
+- Uses system parallel HDF5
+- Selects Intel MKL for linear algebra
+
+<Warning>
+When using custom libraries, ensure they are compatible with each other. For example, parallel HDF5 must be built against the same MPI implementation you're using.
+</Warning>
+
+### Example 4: Intel MKL with OpenMPI
+
+For workstations with Intel processors:
+
+```bash conda_install_dedalus2.sh
+INSTALL_MPI=1
+INSTALL_FFTW=1
+INSTALL_HDF5=1
+BLAS="mkl"
+```
+
+This uses Intel MKL for optimized performance on Intel CPUs while keeping other dependencies from conda-forge.
+
+<Info>
+When using MKL, the build script automatically sets `FFTW_STATIC=1` to statically link FFTW and avoid symbol conflicts with MKL.
+</Info>
+
+## Installation Workflow Details
+
+### Script Execution Flow
+
+The custom build scripts follow this process:
+
+<Steps>
+  <Step title="Validation">
+    Check that the conda base environment is active and required paths are set for custom libraries
+  </Step>
+  
+  <Step title="Environment Creation">
+    Create a new conda environment with the specified name. On Apple Silicon, configure x86_64 emulation if needed.
+  </Step>
+  
+  <Step title="Channel Configuration">
+    Set conda-forge as the primary channel with strict priority:
+    
+    ```bash
+    conda config --add channels conda-forge
+    conda config --set channel_priority strict
+    ```
+  </Step>
+  
+  <Step title="Base Python Stack">
+    Install Python, pip, wheel, setuptools, and Cython from conda-forge
+  </Step>
+  
+  <Step title="BLAS and Numerical Libraries">
+    Install NumPy and SciPy with selected BLAS implementation:
+    
+    ```bash
+    # For OpenBLAS
+    conda install "libblas=*=*openblas" numpy scipy
+    
+    # For Intel MKL
+    conda install "libblas=*=*mkl" numpy scipy
+    ```
+  </Step>
+  
+  <Step title="MPI Installation">
+    Either install OpenMPI from conda-forge or build mpi4py against custom MPI:
+    
+    ```bash
+    # conda-forge OpenMPI
+    conda install compilers openmpi openmpi-mpicc mpi4py
+    
+    # Custom MPI
+    export PATH=${MPI_PATH}/bin:${PATH}
+    pip install --no-cache mpi4py
+    ```
+  </Step>
+  
+  <Step title="FFTW Installation">
+    Install FFTW from conda-forge or use system FFTW via environment variable
+  </Step>
+  
+  <Step title="HDF5 and h5py">
+    Install parallel or serial HDF5 based on MPI configuration:
+    
+    ```bash
+    # Parallel (with conda MPI)
+    conda install "hdf5=*=mpi*" "h5py=*=mpi*"
+    
+    # Serial
+    conda install "hdf5=*=nompi*" "h5py=*=nompi*"
+    
+    # Custom parallel HDF5
+    CC=mpicc pip install --no-cache --no-binary=h5py h5py
+    ```
+  </Step>
+  
+  <Step title="Additional Dependencies">
+    Install remaining Python packages:
+    
+    ```bash
+    conda install docopt matplotlib
+    ```
+  </Step>
+  
+  <Step title="Dedalus Installation">
+    Build and install Dedalus with MPI compiler:
+    
+    ```bash
+    # Dedalus v2 (from PyPI)
+    CC=mpicc pip install --no-cache --no-build-isolation "dedalus==2.*"
+    
+    # Dedalus v3 (from GitHub master)
+    CC=mpicc pip install --no-cache --no-build-isolation \
+      http://github.com/dedalusproject/dedalus/zipball/master/
+    ```
+  </Step>
+  
+  <Step title="Environment Configuration">
+    Set threading variables to prevent oversubscription:
+    
+    ```bash
+    conda env config vars set OMP_NUM_THREADS=1
+    conda env config vars set NUMEXPR_MAX_THREADS=1
+    ```
+  </Step>
+</Steps>
+
+## Advanced Scenarios
+
+### Installing Development Versions via conda-forge
+
+You can use the conda-forge base and install development Dedalus:
+
+```bash
+# Create environment with dependencies
+conda create -y -n dedalus2
+conda activate dedalus2
+conda install -y -c conda-forge dedalus c-compiler cython "h5py=*=mpi*" setuptools
+
+# Remove conda-forge Dedalus and install from GitHub
+conda uninstall -y --force dedalus
+CC=mpicc pip3 install --no-cache --no-build-isolation \
+  http://github.com/dedalusproject/dedalus/zipball/v2_master/
+```
+
+This approach is used in the GitHub Actions test workflows.
+
+### Testing Both Installation Methods
+
+The repository includes GitHub Actions workflows that test both methods nightly:
+
+```yaml .github/workflows/test_conda_builds.yml
+jobs:
+  v2_from_conda_forge:
+    # Tests pure conda-forge installation
+    
+  v2_custom:
+    # Tests custom build script
+    
+  v2_master_via_conda_forge:
+    # Tests development version on conda-forge base
+    
+  v3_master_via_conda_forge:
+    # Tests Dedalus v3 development
+```
+
+These workflows ensure both installation methods remain functional across Ubuntu and macOS.
+
+## Troubleshooting Installation Issues
+
+### Library Incompatibility
+
+If you encounter errors about incompatible libraries:
+
+```bash
+# Check MPI consistency
+which mpicc
+ldd $(which mpicc)
+
+# Check HDF5 was built with parallel support
+h5pcc -showconfig | grep -i parallel
+
+# Verify mpi4py uses correct MPI
+python3 -c "import mpi4py; print(mpi4py.get_config())"
+```
+
+### FFTW Linking Issues
+
+If FFTW is not found during Dedalus installation:
+
+```bash
+# Verify FFTW_PATH points to correct location
+ls ${FFTW_PATH}/lib/libfftw3*
+
+# Check for both single and double precision
+ls ${FFTW_PATH}/lib/libfftw3.* 
+ls ${FFTW_PATH}/lib/libfftw3f.*
+```
+
+### Environment Conflicts
+
+Ensure clean Python environment:
+
+```bash
+# These should be unset or empty
+echo $PYTHONPATH
+echo $PYTHONNOUSERSITE
+
+# Check no ~/.local packages interfere
+python3 -c "import sys; print(sys.path)"
+```
+
+The build scripts automatically set:
+
+```bash
+export PYTHONNOUSERSITE=1  # Ignore ~/.local
+unset PYTHONPATH            # Clear Python path
+```
+
+## Performance Considerations
+
+### BLAS Selection
+
+**OpenBLAS**:
+- Open source and widely compatible
+- Good performance on most hardware
+- Default choice for portability
+
+**Intel MKL**:
+- Optimized for Intel processors
+- Better performance on Intel CPUs
+- May require static FFTW linking
+
+<Info>
+Benchmark your specific workload to determine which BLAS provides better performance. The difference varies by problem size and hardware.
+</Info>
+
+### MPI Implementation
+
+Different MPI implementations have different performance characteristics:
+
+- **OpenMPI**: Good default choice, wide hardware support
+- **MPICH**: Alternative with different communication strategies
+- **Intel MPI**: Optimized for Intel fabrics and processors
+- **Cray MPICH**: Optimized for Cray supercomputers
+
+Use the MPI implementation recommended by your HPC center for optimal interconnect performance.
+
+## Summary
+
+<CardGroup cols={2}>
+  <Card title="conda-forge" icon="box">
+    **Best for**: Laptops, workstations, quick setup
+    
+    **Installation**: `conda install -c conda-forge dedalus`
+    
+    **Time**: < 5 minutes
+  </Card>
+  
+  <Card title="Custom Scripts" icon="wrench">
+    **Best for**: HPC clusters, custom libraries, development
+    
+    **Installation**: `bash conda_install_dedalus2.sh`
+    
+    **Time**: 10-30 minutes
+  </Card>
+</CardGroup>
+
+Both methods produce fully functional Dedalus installations. Choose based on your environment and requirements.

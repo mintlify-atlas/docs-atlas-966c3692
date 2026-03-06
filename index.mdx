@@ -1,97 +1,114 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Dedalus Conda"
+description: "Conda build scripts and recipes for installing the Dedalus spectral PDE solver with custom library support"
 ---
 
-## Setting up
+# Welcome to Dedalus Conda
 
-Get your documentation site up and running in minutes.
+Build and install Dedalus spectral PDE solver with flexible Conda environments that support custom MPI, FFTW, and HDF5 libraries.
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+## Quick Start
 
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
+<CardGroup cols={2}>
   <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
+    title="Quickstart Guide"
+    icon="rocket"
+    href="/quickstart"
   >
-    Edit your docs locally and preview them in real time.
+    Get Dedalus running in minutes with our automated build scripts
   </Card>
   <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
+    title="Installation Methods"
+    icon="download"
+    href="/installation-methods"
   >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+    Choose between conda-forge or custom build scripts
   </Card>
   <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
+    title="Build Scripts"
+    icon="scroll"
+    href="/scripts/dedalus-v2"
   >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
-
-## Create beautiful pages
-
-Everything you need to create world-class documentation.
-
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
+    Explore the v2 and v3 build scripts in detail
   </Card>
   <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
+    title="Configuration"
+    icon="sliders"
+    href="/configuration/mpi-setup"
   >
-    Add sample code to demonstrate how to use your product.
+    Configure MPI, FFTW, HDF5, and BLAS options
+  </Card>
+</CardGroup>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card
+    title="Automated Environment Setup"
+    icon="wand-magic-sparkles"
+  >
+    One-command installation for Dedalus v2 and v3 with all dependencies
   </Card>
   <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
+    title="Custom Library Support"
+    icon="link"
   >
-    Display images and other media.
+    Link to system-specific MPI, FFTW, and HDF5 libraries for optimal performance
   </Card>
   <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
+    title="Multi-Platform"
+    icon="server"
   >
-    Write once and reuse across your docs.
+    Tested on Linux and macOS (x86 and Apple Silicon)
   </Card>
-</Columns>
+  <Card
+    title="CI/CD Integration"
+    icon="circle-check"
+  >
+    GitHub Actions workflows for automated build testing
+  </Card>
+</CardGroup>
 
-## Need inspiration?
+## Installation Options
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+### Conda-Forge (Recommended for Most Users)
+
+Install Dedalus directly from conda-forge with pre-built binaries:
+
+```bash
+conda create -n dedalus2 -c conda-forge dedalus
+conda activate dedalus2
+```
+
+Perfect for laptops, workstations, and clusters that don't require custom C libraries.
+
+### Custom Build Scripts
+
+Use our build scripts to link against system-specific libraries:
+
+```bash
+git clone https://github.com/DedalusProject/dedalus_conda.git
+cd dedalus_conda
+bash conda_install_dedalus2.sh
+```
+
+Ideal for HPC environments requiring custom MPI implementations or optimized FFTW builds.
+
+## Need Help?
+
+<CardGroup cols={2}>
+  <Card
+    title="Troubleshooting"
+    icon="wrench"
+    href="/advanced/troubleshooting"
+  >
+    Common issues and solutions
+  </Card>
+  <Card
+    title="GitHub Repository"
+    icon="github"
+    href="https://github.com/DedalusProject/dedalus_conda"
+  >
+    View source code and report issues
+  </Card>
+</CardGroup>

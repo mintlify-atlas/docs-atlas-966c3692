@@ -1,0 +1,199 @@
+---
+title: MPI Configuration
+description: Configure MPI installation options for Dedalus builds, including OpenMPI from conda or custom system MPI libraries
+---
+
+## Overview
+
+The Dedalus build scripts provide flexible MPI (Message Passing Interface) configuration options. You can either install OpenMPI from conda-forge or link to a custom system MPI installation.
+
+## Configuration Options
+
+### INSTALL_MPI
+
+<ParamField path="INSTALL_MPI" type="integer" default="1">
+  Controls whether to install OpenMPI from conda-forge.
+  
+  **Valid values:**
+  - `1` - Install OpenMPI from conda-forge (default)
+  - `0` - Use custom MPI installation (requires MPI_PATH)
+</ParamField>
+
+### MPI_PATH
+
+<ParamField path="MPI_PATH" type="string" required="when INSTALL_MPI=0">
+  Path to your custom MPI installation prefix.
+  
+  Must be set when `INSTALL_MPI=0`. The build script will look for MPI binaries in `${MPI_PATH}/bin`.
+</ParamField>
+
+## Installation Modes
+
+<Tabs>
+  <Tab title="OpenMPI from conda">
+    The default configuration installs OpenMPI from conda-forge along with the required compilers and mpi4py.
+
+    ```bash
+    # Default configuration
+    INSTALL_MPI=1
+    ```
+
+    This mode:
+    - Installs conda-forge compilers
+    - Installs OpenMPI and openmpi-mpicc
+    - Installs mpi4py from conda
+    - Works seamlessly with conda-installed FFTW and HDF5
+  </Tab>
+
+  <Tab title="Custom MPI">
+    Use a custom MPI installation when you need to link to system-specific MPI libraries (e.g., on HPC clusters).
+
+    ```bash
+    # Custom MPI configuration
+    INSTALL_MPI=0
+    export MPI_PATH="/opt/mpi/openmpi-4.1.4"
+    ```
+
+    This mode:
+    - Does not install OpenMPI from conda
+    - Requires MPI_PATH to be set
+    - Adds `${MPI_PATH}/bin` to PATH
+    - Installs mpi4py with pip (building against custom MPI)
+  </Tab>
+</Tabs>
+
+## Build Behavior
+
+### With INSTALL_MPI=1
+
+From the build script:
+
+```bash conda_install_dedalus3.sh
+if [ ${INSTALL_MPI} -eq 1 ]
+then
+    echo "Installing conda-forge compilers, openmpi, mpi4py"
+    conda install "${CARGS[@]}" compilers openmpi openmpi-mpicc mpi4py
+```
+
+The script installs:
+- `compilers` - Conda-forge compiler toolchain
+- `openmpi` - OpenMPI library
+- `openmpi-mpicc` - MPI C compiler wrapper
+- `mpi4py` - Python MPI bindings
+
+### With INSTALL_MPI=0
+
+From the build script:
+
+```bash conda_install_dedalus3.sh
+else
+    echo "Not installing openmpi"
+    echo "Installing mpi4py with pip"
+    # Make sure mpicc will appear on path
+    export PATH=${MPI_PATH}/bin:${PATH}
+    echo "which mpicc: `which mpicc`"
+    # no-cache to avoid wheels from previous pip installs
+    python3 -m pip install --no-cache mpi4py
+fi
+```
+
+The script:
+1. Adds your custom MPI binaries to PATH
+2. Verifies `mpicc` is accessible
+3. Builds mpi4py from source against your custom MPI
+
+## Validation
+
+The build script validates MPI configuration before proceeding:
+
+```bash conda_install_dedalus3.sh
+if [ ${INSTALL_MPI} -ne 1 ]
+then
+    if [ -z ${MPI_PATH} ]
+    then
+        >&2 echo "ERROR: MPI_PATH must be set"
+        exit 1
+    else
+        echo "MPI_PATH set to '${MPI_PATH}'"
+    fi
+fi
+```
+
+<Warning>
+When `INSTALL_MPI=0`, you **must** set `MPI_PATH` or the build will fail with an error.
+</Warning>
+
+## Platform Considerations
+
+### HPC Clusters
+
+On HPC systems, you typically want to use the system-provided MPI:
+
+```bash
+# Example for SLURM cluster with module system
+module load openmpi/4.1.4
+
+# Set in build script
+INSTALL_MPI=0
+export MPI_PATH="/opt/hpc/openmpi/4.1.4"
+```
+
+### Workstations and Laptops
+
+For local development, the conda-forge OpenMPI is recommended:
+
+```bash
+# Default - simplest option
+INSTALL_MPI=1
+```
+
+### Compatibility with FFTW
+
+<Note>
+FFFTW from conda-forge is built for OpenMPI. If you use a custom MPI that is not OpenMPI-compatible, you may need to also use a custom FFTW build.
+
+From the build script comments:
+```bash
+# Note: FFTW from conda will likely only work with custom MPIs that are OpenMPI
+```
+</Note>
+
+## Related Configuration
+
+- [FFTW Configuration](/configuration/fftw-setup) - FFTW depends on MPI configuration
+- [HDF5 Configuration](/configuration/hdf5-setup) - HDF5 parallel support requires MPI
+
+## Common Patterns
+
+<CodeGroup>
+
+```bash Standard conda build
+# Install everything from conda-forge
+INSTALL_MPI=1
+INSTALL_FFTW=1
+INSTALL_HDF5=1
+```
+
+```bash HPC cluster build
+# Use system MPI and libraries
+INSTALL_MPI=0
+export MPI_PATH="/opt/mpi/openmpi-4.1.4"
+
+INSTALL_FFTW=0
+export FFTW_PATH="/opt/fftw/3.3.10"
+
+INSTALL_HDF5=0
+export HDF5_DIR="/opt/hdf5/1.12.2"
+export HDF5_MPI="ON"
+```
+
+```bash Mixed configuration
+# Use conda FFTW/HDF5 with system MPI
+INSTALL_MPI=0
+export MPI_PATH="/usr/local/openmpi"
+
+INSTALL_FFTW=1
+INSTALL_HDF5=1
+```
+
+</CodeGroup>

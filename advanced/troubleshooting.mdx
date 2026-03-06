@@ -1,0 +1,634 @@
+---
+title: Troubleshooting
+description: Common issues, error messages, and solutions for Dedalus conda installations
+---
+
+## Installation Errors
+
+### Conda Base Environment Not Activated
+
+<Accordion title="ERROR: Conda base environment must be activated">
+
+**Error Message:**
+```bash
+ERROR: Conda base environment must be activated
+```
+
+**Cause:**
+The build script checks that you're running from the conda base environment before creating a new Dedalus environment.
+
+**Solution:**
+
+<Steps>
+
+### Activate the Base Environment
+
+```bash
+conda activate base
+```
+
+### Verify Activation
+
+```bash
+echo $CONDA_DEFAULT_ENV
+# Should output: base
+```
+
+### Run the Script Again
+
+```bash
+bash conda_install_dedalus3.sh
+```
+
+</Steps>
+
+<Note>
+If you're not in any conda environment, you may need to initialize conda first:
+```bash
+conda init bash  # or zsh, fish, etc.
+# Restart your shell
+conda activate base
+```
+</Note>
+
+</Accordion>
+
+### Missing Custom Library Paths
+
+<Accordion title="ERROR: MPI_PATH must be set">
+
+**Error Message:**
+```bash
+ERROR: MPI_PATH must be set
+```
+
+**Cause:**
+You set `INSTALL_MPI=0` to use a custom MPI installation, but didn't provide the path to your MPI.
+
+**Solution:**
+
+Edit the script configuration at the top:
+
+```bash
+INSTALL_MPI=0
+export MPI_PATH=/path/to/your/mpi  # Add this line
+```
+
+The MPI_PATH should be the prefix directory containing `bin/mpicc`.
+
+**Find Your MPI Path:**
+
+```bash
+# Find mpicc location
+which mpicc
+# Output example: /usr/local/mpi/bin/mpicc
+# MPI_PATH is: /usr/local/mpi
+
+# Or check environment modules
+module show openmpi
+# Look for PREFIX or PATH variables
+```
+
+</Accordion>
+
+<Accordion title="ERROR: FFTW_PATH must be set">
+
+**Error Message:**
+```bash
+ERROR: FFTW_PATH must be set
+```
+
+**Solution:**
+
+Edit the script:
+
+```bash
+INSTALL_FFTW=0
+export FFTW_PATH=/path/to/your/fftw
+```
+
+**Find Your FFTW Path:**
+
+```bash
+# Search for FFTW libraries
+find /usr/local -name "libfftw3.so" 2>/dev/null
+find /opt -name "libfftw3.so" 2>/dev/null
+
+# Check module files
+module show fftw
+```
+
+</Accordion>
+
+<Accordion title="ERROR: HDF5_DIR must be set">
+
+**Error Message:**
+```bash
+ERROR: HDF5_DIR must be set
+```
+
+**Solution:**
+
+```bash
+INSTALL_HDF5=0
+export HDF5_DIR=/path/to/your/hdf5
+export HDF5_MPI="ON"  # If parallel HDF5, otherwise omit
+```
+
+**Find Your HDF5 Path:**
+
+```bash
+# Check for h5pcc (parallel) or h5cc (serial)
+which h5pcc
+# Or search for libraries
+find /usr/local -name "libhdf5.so" 2>/dev/null
+```
+
+</Accordion>
+
+### Compiler and Linking Issues
+
+<Accordion title="mpicc: command not found">
+
+**Error During Installation:**
+```bash
+mpicc: command not found
+error: command 'mpicc' failed
+```
+
+**Cause:**
+The custom MPI's compiler is not in your PATH.
+
+**Solutions:**
+
+<Steps>
+
+### Verify MPI_PATH
+
+Check that your MPI_PATH is correct:
+
+```bash
+ls ${MPI_PATH}/bin/mpicc
+# Should show the mpicc binary
+```
+
+### Load Environment Modules
+
+If using environment modules:
+
+```bash
+module load openmpi  # or intel-mpi, mpich, etc.
+module list  # Verify it's loaded
+```
+
+### Manually Add to PATH
+
+Before running the script:
+
+```bash
+export PATH=/path/to/mpi/bin:$PATH
+which mpicc  # Verify it's found
+```
+
+</Steps>
+
+</Accordion>
+
+<Accordion title="Library linking errors (ld: library not found)">
+
+**Error During pip Install:**
+```bash
+ld: library not found for -lfftw3
+ld: library not found for -lhdf5
+```
+
+**Cause:**
+The linker cannot find your custom libraries.
+
+**Solution:**
+
+Set library paths before running the script:
+
+**Linux:**
+```bash
+export LD_LIBRARY_PATH=/path/to/fftw/lib:/path/to/hdf5/lib:/path/to/mpi/lib:$LD_LIBRARY_PATH
+```
+
+**macOS:**
+```bash
+export DYLD_LIBRARY_PATH=/path/to/fftw/lib:/path/to/hdf5/lib:/path/to/mpi/lib:$DYLD_LIBRARY_PATH
+```
+
+**Persistent Solution:**
+
+Add to your `~/.bashrc` or `~/.zshrc`:
+
+```bash
+if [ -d "/path/to/custom/libs" ]; then
+    export LD_LIBRARY_PATH="/path/to/custom/libs/lib:$LD_LIBRARY_PATH"
+fi
+```
+
+</Accordion>
+
+<Accordion title="Python.h: No such file or directory">
+
+**Error:**
+```bash
+fatal error: Python.h: No such file or directory
+```
+
+**Cause:**
+Python development headers are missing (unlikely in conda, but possible with system Python).
+
+**Solution:**
+
+Ensure you're using the conda Python:
+
+```bash
+conda activate dedalus3
+which python3
+# Should show: /path/to/conda/envs/dedalus3/bin/python3
+
+# Reinstall Python if needed
+conda install -y python=${PYTHON_VERSION}
+```
+
+</Accordion>
+
+## Runtime Errors
+
+### Test Suite Failures
+
+<Accordion title="python3 -m dedalus test fails">
+
+**Error:**
+```bash
+python3 -m dedalus test
+# Various test failures or import errors
+```
+
+**Common Causes and Solutions:**
+
+<Steps>
+
+### Import Errors
+
+If you see `ImportError` or `ModuleNotFoundError`:
+
+```bash
+# Ensure environment is activated
+conda activate dedalus3
+
+# Verify dedalus is installed
+python3 -c "import dedalus; print(dedalus.__version__)"
+
+# Check for conflicting packages
+conda list | grep dedalus
+```
+
+### MPI Errors
+
+If tests hang or show MPI errors:
+
+```bash
+# Check MPI is working
+mpiexec -n 2 python3 -c "from mpi4py import MPI; print(MPI.COMM_WORLD.Get_rank())"
+
+# Verify threading is disabled (important!)
+conda activate dedalus3
+echo $OMP_NUM_THREADS  # Should be 1
+echo $NUMEXPR_MAX_THREADS  # Should be 1
+```
+
+### Numerical Errors
+
+If tests fail with numerical accuracy issues:
+
+- May indicate BLAS/LAPACK issues
+- On Apple Silicon with arm64, try x86_64 build instead
+- Check FFTW and BLAS libraries are compatible
+
+</Steps>
+
+</Accordion>
+
+<Accordion title="Segmentation fault during parallel runs">
+
+**Error:**
+```bash
+mpiexec -n 4 python3 script.py
+Segmentation fault (core dumped)
+```
+
+**Common Causes:**
+
+1. **MPI Version Mismatch**
+   - All components (mpi4py, h5py, FFTW, Dedalus) must use the same MPI
+   - Verify with:
+     ```bash
+     python3 -c "import mpi4py; print(mpi4py.get_config())"
+     ldd $(python3 -c "import h5py; print(h5py.__file__)") | grep mpi
+     ```
+
+2. **Threading Conflicts**
+   - Ensure threading is disabled:
+     ```bash
+     export OMP_NUM_THREADS=1
+     export NUMEXPR_MAX_THREADS=1
+     ```
+
+3. **Oversubscription**
+   - Don't run more MPI processes than CPU cores
+   - Use `mpiexec -n <cores>` appropriately
+
+4. **Custom Library Issues**
+   - Rebuild with all libraries from conda-forge to isolate the issue
+
+</Accordion>
+
+### Environment Issues
+
+<Accordion title="Package conflicts or dependency errors">
+
+**Error:**
+```bash
+Unsatisfiable dependencies
+Conflicting packages
+```
+
+**Solutions:**
+
+<Steps>
+
+### Try a Clean Environment
+
+```bash
+conda deactivate
+conda env remove -n dedalus3
+# Edit script if needed
+bash conda_install_dedalus3.sh
+```
+
+### Update Conda
+
+```bash
+conda activate base
+conda update -n base conda
+```
+
+### Clear Conda Cache
+
+```bash
+conda clean --all
+```
+
+### Check Channel Priority
+
+The script sets strict channel priority. Verify:
+
+```bash
+conda config --show channel_priority
+# Should be: strict
+```
+
+</Steps>
+
+</Accordion>
+
+<Accordion title="WARNING: Conda environment already exists">
+
+**Message:**
+```bash
+WARNING: Conda environment 'dedalus3' already exists
+Proceed ([y]/n)?
+```
+
+**This is not an error.** The script detects an existing environment.
+
+**Options:**
+
+1. **Proceed (y)**: Updates packages in the existing environment
+   - May cause conflicts if packages were manually modified
+
+2. **Cancel (n) and remove**: Start fresh
+   ```bash
+   conda env remove -n dedalus3
+   bash conda_install_dedalus3.sh
+   ```
+
+3. **Change environment name**: Edit `CONDA_ENV` in the script
+   ```bash
+   CONDA_ENV="dedalus3_new"
+   ```
+
+</Accordion>
+
+## Platform-Specific Issues
+
+### macOS
+
+<Accordion title="Apple Silicon (M1/M2/M3) numerical errors">
+
+**Symptoms:**
+- Test failures with numerical accuracy issues
+- `ggev` errors in LAPACK routines
+- Unexpected NaN or Inf values
+
+**Cause:**
+Some library versions have issues with arm64 architecture.
+
+**Solution:**
+
+Use the x86_64 build via Rosetta (default in scripts):
+
+```bash
+APPLE_SILICON_BUILD_ARM=0  # Default, uses Rosetta
+```
+
+The script automatically:
+- Creates environment with `CONDA_SUBDIR=osx-64`
+- Pins `libopenblas<0.3.20` on arm64 if needed
+
+**If you need native arm64:**
+```bash
+APPLE_SILICON_BUILD_ARM=1  # May have issues
+```
+
+</Accordion>
+
+<Accordion title="macOS library loading errors">
+
+**Error:**
+```bash
+dyld: Library not loaded
+```
+
+**Solution:**
+
+Ensure `DYLD_LIBRARY_PATH` is set if using custom libraries:
+
+```bash
+export DYLD_LIBRARY_PATH=/path/to/custom/libs/lib:$DYLD_LIBRARY_PATH
+```
+
+<Warning>
+On newer macOS versions, `DYLD_LIBRARY_PATH` may be restricted by System Integrity Protection (SIP). Using conda-forge libraries avoids this issue.
+</Warning>
+
+</Accordion>
+
+### Linux
+
+<Accordion title="HPC cluster MPI conflicts">
+
+**Symptoms:**
+- MPI jobs fail to start
+- Conflicts with job scheduler (SLURM, PBS)
+- "PMI" or "PMIx" errors
+
+**Solution:**
+
+1. **Use system MPI:**
+   ```bash
+   INSTALL_MPI=0
+   export MPI_PATH=/path/to/system/mpi
+   ```
+
+2. **Load correct modules:**
+   ```bash
+   module purge
+   module load mpi/openmpi  # or your cluster's MPI
+   ```
+
+3. **Check SLURM integration:**
+   - Use `srun` instead of `mpiexec` on SLURM clusters
+   - Ensure MPI is compiled with SLURM support
+
+</Accordion>
+
+<Accordion title="GLIBC version errors">
+
+**Error:**
+```bash
+version `GLIBC_2.XX' not found
+```
+
+**Cause:**
+Conda packages built with newer GLIBC than your system has.
+
+**Solutions:**
+
+1. **Update your system** (if possible)
+
+2. **Use older conda packages:**
+   ```bash
+   conda install "python<3.12"
+   ```
+
+3. **Use custom builds** compiled on your system
+
+</Accordion>
+
+## Performance Issues
+
+<Accordion title="Slow performance or high CPU usage when idle">
+
+**Cause:**
+Threading is not properly disabled. Multiple OpenMP threads compete with MPI.
+
+**Solution:**
+
+The script sets these automatically, but verify:
+
+```bash
+conda activate dedalus3
+echo $OMP_NUM_THREADS  # Should be 1
+echo $NUMEXPR_MAX_THREADS  # Should be 1
+```
+
+**Set manually if needed:**
+```bash
+conda env config vars set OMP_NUM_THREADS=1
+conda env config vars set NUMEXPR_MAX_THREADS=1
+conda deactivate
+conda activate dedalus3
+```
+
+**For individual scripts:**
+```bash
+export OMP_NUM_THREADS=1
+export NUMEXPR_MAX_THREADS=1
+python3 script.py
+```
+
+</Accordion>
+
+<Accordion title="Out of memory errors">
+
+**Error:**
+```bash
+MemoryError
+killed
+```
+
+**Solutions:**
+
+1. **Reduce problem size** (lower resolution, smaller domain)
+
+2. **Use more MPI processes** (distributes memory)
+   ```bash
+   mpiexec -n 8 python3 script.py  # Instead of -n 4
+   ```
+
+3. **Monitor memory usage:**
+   ```bash
+   # Check available memory
+   free -h  # Linux
+   vm_stat  # macOS
+   ```
+
+4. **Increase system swap** (last resort, slower)
+
+</Accordion>
+
+## Getting Help
+
+If you're still experiencing issues:
+
+<Steps>
+
+### Gather Diagnostic Information
+
+```bash
+# System info
+uname -a
+conda --version
+
+# Environment info
+conda activate dedalus3
+conda list
+python3 -c "import dedalus; print(dedalus.__version__)"
+python3 -c "import mpi4py; print(mpi4py.get_config())"
+```
+
+### Check GitHub Issues
+
+Search existing issues in the [Dedalus repository](https://github.com/DedalusProject/dedalus) and this conda builds repository.
+
+### Post Detailed Issue
+
+Include:
+- Full error message and traceback
+- Platform and conda version
+- Custom library configuration (if any)
+- Minimal reproducing example
+- Diagnostic information from above
+
+</Steps>
+
+## Related Resources
+
+- [Custom Libraries Guide](/advanced/custom-libraries) - Configure custom MPI/FFTW/HDF5
+- [CI/CD Workflows](/advanced/ci-cd) - See how builds are tested
+- [Installation Guide](/installation) - Standard installation instructions

@@ -1,0 +1,367 @@
+---
+title: Apple Silicon Configuration
+description: Configure Dedalus builds for Apple Silicon (M1/M2/M3) processors with arm64 or x86_64 architecture options
+---
+
+## Overview
+
+Apple Silicon Macs (M1, M2, M3) can run code in two modes: native arm64 or x86_64 via Rosetta 2 emulation. The build scripts provide a configuration option to choose between these modes.
+
+## Configuration Option
+
+### APPLE_SILICON_BUILD_ARM
+
+<ParamField path="APPLE_SILICON_BUILD_ARM" type="integer" default="0">
+  Controls whether to build native arm64 packages on Apple Silicon.
+  
+  **Valid values:**
+  - `0` - Build x86_64 packages using Rosetta 2 (default, more stable)
+  - `1` - Build native arm64 packages
+  
+  **Note:** Only relevant on Apple Silicon machines. Automatically set to 0 on other platforms.
+</ParamField>
+
+## Build Modes
+
+<Tabs>
+  <Tab title="x86_64 Mode (Default)">
+    By default, the build uses x86_64 packages that run via Rosetta 2 emulation.
+
+    ```bash
+    APPLE_SILICON_BUILD_ARM=0
+    ```
+
+    ### Build Process
+
+    From the build script:
+
+    ```bash conda_install_dedalus3.sh
+    echo "Building new conda environment '${CONDA_ENV}'"
+    if [ ${ON_APPLE_SILICON} -eq 1 ] && [ ${APPLE_SILICON_BUILD_ARM} -eq 0 ]
+    then
+        CONDA_SUBDIR=osx-64 conda create "${CARGS[@]}"
+        conda activate ${CONDA_ENV}
+        conda config --env --set subdir osx-64
+    ```
+
+    The environment is configured to use `osx-64` (x86_64) packages:
+    - Sets `CONDA_SUBDIR=osx-64` during creation
+    - Configures the environment to maintain `subdir osx-64`
+    - All packages are x86_64 and run via Rosetta 2
+
+    ### Advantages
+
+    - **More stable**: Better tested package ecosystem
+    - **Fewer bugs**: Avoids arm64-specific issues
+    - **Recommended default**: As noted in the script comments
+    - **Good performance**: Rosetta 2 is efficient for most workloads
+
+    <Info>
+    This is the **recommended mode** for Apple Silicon. The x86_64 packages via Rosetta 2 provide better stability with minimal performance impact.
+    </Info>
+  </Tab>
+
+  <Tab title="arm64 Native Mode">
+    Native arm64 builds can offer better performance but may encounter platform-specific issues.
+
+    ```bash
+    APPLE_SILICON_BUILD_ARM=1
+    ```
+
+    ### Build Process
+
+    From the build script:
+
+    ```bash conda_install_dedalus3.sh
+    else
+        conda create "${CARGS[@]}"
+        conda activate ${CONDA_ENV}
+    fi
+    ```
+
+    When `APPLE_SILICON_BUILD_ARM=1`, the script:
+    - Uses the native arm64 conda subdirectory
+    - Installs arm64-compiled packages
+    - Runs natively without Rosetta 2
+
+    ### OpenBLAS Version Pinning
+
+    Native arm64 builds require special handling for OpenBLAS:
+
+    ```bash conda_install_dedalus3.sh
+    case "${BLAS}" in
+    "openblas")
+        echo "Installing conda-forge openblas, numpy, scipy"
+        # Pin openblas on apple silicon since 0.3.20 causes ggev errors
+        if [ ${APPLE_SILICON_BUILD_ARM} -eq 1 ]
+        then
+            conda install "${CARGS[@]}" "libopenblas<0.3.20"
+        fi
+    ```
+
+    <Warning>
+    OpenBLAS versions >= 0.3.20 cause errors in generalized eigenvalue problems (`ggev`) on native arm64. The build script automatically pins to earlier versions.
+    </Warning>
+
+    ### Advantages
+
+    - **Native performance**: No emulation overhead
+    - **Better energy efficiency**: Native code is more power-efficient
+    - **Future-proof**: As arm64 ecosystem matures
+
+    ### Disadvantages
+
+    - **Known issues**: OpenBLAS ggev errors in newer versions
+    - **Less tested**: Smaller user base on arm64
+    - **Compatibility**: Some packages may not be available for arm64
+  </Tab>
+</Tabs>
+
+## Platform Detection
+
+The build script automatically detects Apple Silicon:
+
+```bash conda_install_dedalus3.sh
+# Unset arm build flag unless on Apple Silicon
+if [ $(uname -s) == "Darwin" ] && [ $(uname -m) == "arm64" ]
+then
+    ON_APPLE_SILICON=1
+else
+    ON_APPLE_SILICON=0
+    APPLE_SILICON_BUILD_ARM=0
+fi
+```
+
+- Checks for `Darwin` (macOS) and `arm64` architecture
+- Sets `ON_APPLE_SILICON=1` if both conditions are true
+- Forces `APPLE_SILICON_BUILD_ARM=0` on non-Apple Silicon platforms
+
+<Note>
+The `APPLE_SILICON_BUILD_ARM` option is automatically disabled on Intel Macs, Linux, and Windows. It only has an effect on Apple Silicon hardware.
+</Note>
+
+## Choosing Your Build Mode
+
+### Recommended: x86_64 Mode
+
+For most users, stick with the default x86_64 mode:
+
+```bash
+# Recommended configuration for Apple Silicon
+APPLE_SILICON_BUILD_ARM=0
+BLAS="openblas"
+```
+
+This provides:
+- Maximum stability
+- Well-tested package ecosystem
+- Minimal configuration needed
+- Good performance via Rosetta 2
+
+### When to Use arm64 Mode
+
+Consider native arm64 if:
+- You need maximum performance
+- You're comfortable troubleshooting platform issues
+- Your workloads are CPU-intensive
+- You want better power efficiency
+
+```bash
+# Native arm64 configuration
+APPLE_SILICON_BUILD_ARM=1
+BLAS="openblas"
+# OpenBLAS will be automatically pinned to <0.3.20
+```
+
+## Complete Configuration Examples
+
+<CodeGroup>
+
+```bash Recommended (x86_64)
+# Default, stable configuration
+CONDA_ENV="dedalus3"
+PYTHON_VERSION="3.12"
+
+INSTALL_MPI=1
+INSTALL_FFTW=1
+INSTALL_HDF5=1
+
+BLAS="openblas"
+
+# Use x86_64 via Rosetta 2
+APPLE_SILICON_BUILD_ARM=0
+```
+
+```bash Native arm64
+# Native performance with known workarounds
+CONDA_ENV="dedalus3"
+PYTHON_VERSION="3.12"
+
+INSTALL_MPI=1
+INSTALL_FFTW=1
+INSTALL_HDF5=1
+
+BLAS="openblas"
+
+# Use native arm64
+APPLE_SILICON_BUILD_ARM=1
+# OpenBLAS <0.3.20 will be installed automatically
+```
+
+```bash Try both modes
+# Build x86_64 environment
+CONDA_ENV="dedalus3_x86"
+APPLE_SILICON_BUILD_ARM=0
+bash conda_install_dedalus3.sh
+
+# Build arm64 environment
+CONDA_ENV="dedalus3_arm"
+APPLE_SILICON_BUILD_ARM=1
+bash conda_install_dedalus3.sh
+
+# Test and compare
+conda activate dedalus3_x86
+python3 -m dedalus test
+
+conda activate dedalus3_arm
+python3 -m dedalus test
+```
+
+</CodeGroup>
+
+## Checking Your Architecture
+
+After installation, verify which architecture you're using:
+
+```bash
+# Check system architecture
+uname -m
+# arm64 = Apple Silicon hardware
+
+# Check Python architecture
+conda activate dedalus3
+python3 -c "import platform; print(platform.machine())"
+# x86_64 = Rosetta 2 emulation
+# arm64 = Native Apple Silicon
+
+# Check conda environment subdirectory
+conda config --show subdir
+# osx-64 = x86_64 packages
+# osx-arm64 = arm64 packages
+```
+
+## GitHub Actions Testing
+
+The GitHub Actions workflows test x86_64 mode on macOS:
+
+```yaml test_conda_builds.yml
+- os: macos-latest
+  label: osx-64
+```
+
+The CI only tests `osx-64` (x86_64), reflecting that this is the recommended configuration.
+
+## Known Issues and Workarounds
+
+### OpenBLAS ggev Errors (arm64)
+
+**Issue**: OpenBLAS >= 0.3.20 causes errors in generalized eigenvalue problems
+
+**Workaround**: Automatically applied by the build script
+
+```bash
+if [ ${APPLE_SILICON_BUILD_ARM} -eq 1 ]
+then
+    conda install "${CARGS[@]}" "libopenblas<0.3.20"
+fi
+```
+
+### Package Availability (arm64)
+
+**Issue**: Some packages may not be available for arm64
+
+**Workaround**: Use x86_64 mode
+
+```bash
+APPLE_SILICON_BUILD_ARM=0
+```
+
+### Performance Testing
+
+To compare performance between modes:
+
+```bash
+# Run your simulation in both environments
+time python3 your_simulation.py
+
+# Compare:
+# - Wall time
+# - CPU efficiency
+# - Results correctness
+```
+
+## Migration Guide
+
+### From x86_64 to arm64
+
+If you want to try native arm64:
+
+```bash
+# Create new environment with arm64
+CONDA_ENV="dedalus3_arm64"
+APPLE_SILICON_BUILD_ARM=1
+bash conda_install_dedalus3.sh
+
+# Test thoroughly
+conda activate dedalus3_arm64
+python3 -m dedalus test
+
+# Run your existing simulations
+python3 your_simulation.py
+
+# Compare results with x86_64 version
+```
+
+### From arm64 to x86_64
+
+If experiencing issues with arm64:
+
+```bash
+# Create new x86_64 environment
+CONDA_ENV="dedalus3_x86"
+APPLE_SILICON_BUILD_ARM=0
+bash conda_install_dedalus3.sh
+
+# Should be more stable
+conda activate dedalus3_x86
+python3 -m dedalus test
+```
+
+## Related Configuration
+
+- [BLAS Options](/configuration/blas-options) - OpenBLAS version pinning for arm64
+- [MPI Configuration](/configuration/mpi-setup) - MPI works in both modes
+
+## Recommendations Summary
+
+<Info>
+**For most users on Apple Silicon:**
+
+```bash
+APPLE_SILICON_BUILD_ARM=0  # Use x86_64 via Rosetta 2
+BLAS="openblas"
+```
+
+This provides the best balance of stability and performance.
+</Info>
+
+<Warning>
+**If using native arm64:**
+
+```bash
+APPLE_SILICON_BUILD_ARM=1
+BLAS="openblas"  # Will be pinned to <0.3.20
+```
+
+Be aware of the OpenBLAS version limitation and test thoroughly.
+</Warning>

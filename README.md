@@ -1,28 +1,10 @@
-# Mintlify Starter Kit
+# Dedalus Conda Documentation
 
-Use the starter kit to get your docs deployed and ready to customize.
+Documentation for the Dedalus Conda build scripts and recipes for installing the Dedalus spectral PDE solver with custom library support.
 
-Click the green **Use this template** button at the top of this repo to copy the Mintlify starter kit. The starter kit contains examples with
+## About
 
-- Guide pages
-- Navigation
-- Customizations
-- API reference pages
-- Use of popular components
-
-**[Follow the full quickstart guide](https://starter.mintlify.com/quickstart)**
-
-## AI-assisted writing
-
-Set up your AI coding tool to work with Mintlify:
-
-```bash
-npx skills add https://mintlify.com/docs
-```
-
-This command installs Mintlify's documentation skill for your configured AI tools like Claude Code, Cursor, Windsurf, and others. The skill includes component reference, writing standards, and workflow guidance.
-
-See the [AI tools guides](/ai-tools) for tool-specific setup.
+This repository contains documentation for the [Dedalus Conda](https://github.com/DedalusProject/dedalus_conda) project, which provides automated Conda environment setup scripts for installing Dedalus with flexible configuration options for MPI, FFTW, and HDF5 libraries.
 
 ## Development
 

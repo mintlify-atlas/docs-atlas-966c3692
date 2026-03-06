@@ -1,0 +1,302 @@
+---
+title: Using Custom Libraries
+description: Guide for linking Dedalus to custom or system-specific MPI, FFTW, and HDF5 libraries for HPC environments
+---
+
+## Overview
+
+The Dedalus conda build scripts support linking to custom MPI, FFTW, and HDF5 libraries instead of using conda-forge versions. This is essential for:
+
+- High-performance computing (HPC) clusters with vendor-optimized MPI implementations
+- Systems requiring specific MPI flavors (Intel MPI, Cray MPICH, etc.)
+- Environments with pre-existing optimized library installations
+- Clusters where conda-installed MPI may conflict with system configurations
+
+<Warning>
+Custom library configurations are more complex and should only be used when the conda-forge build is insufficient for your needs. For laptops and workstations, use the standard conda-forge installation.
+</Warning>
+
+## When to Use Custom Libraries
+
+### Use Custom Libraries When:
+
+- Your HPC cluster requires a specific MPI implementation (e.g., Intel MPI, Cray MPICH)
+- You need vendor-optimized libraries for maximum performance
+- System administrators provide pre-built libraries tuned for your hardware
+- The conda-installed MPI conflicts with your cluster's job scheduler
+
+### Use Conda Libraries When:
+
+- Installing on a laptop or workstation
+- You have full control over the system
+- Simplicity and reproducibility are priorities
+- You don't have access to system-specific optimized libraries
+
+## Configuration Options
+
+Both `conda_install_dedalus2.sh` and `conda_install_dedalus3.sh` provide three main configuration flags at the top of the script:
+
+```bash
+# Install OpenMPI from conda, otherwise MPI_PATH must be set
+INSTALL_MPI=1
+#export MPI_PATH=/path/to/custom/mpi
+
+# Install FFTW from conda, otherwise FFTW_PATH must be set
+INSTALL_FFTW=1
+#export FFTW_PATH=/path/to/custom/fftw
+
+# Install HDF5 from conda, otherwise HDF5_DIR must be set
+INSTALL_HDF5=1
+#export HDF5_DIR=/path/to/custom/hdf5
+#export HDF5_MPI="ON"
+```
+
+## Using Custom MPI
+
+<Steps>
+
+### Locate Your MPI Installation
+
+Find the prefix directory of your system MPI installation:
+
+```bash
+which mpicc
+# Example output: /usr/local/mpi/bin/mpicc
+# MPI_PATH would be: /usr/local/mpi
+```
+
+Common MPI locations on HPC systems:
+- `/opt/intel/mpi`
+- `/usr/local/mpi`
+- `/sw/mpi`
+- Loaded via environment modules: `module show openmpi`
+
+### Configure the Build Script
+
+Edit the script before running:
+
+```bash
+INSTALL_MPI=0
+export MPI_PATH=/usr/local/mpi  # Your MPI prefix
+```
+
+### What Happens
+
+- The script will NOT install OpenMPI from conda
+- `mpi4py` will be built from source using pip
+- The script adds `${MPI_PATH}/bin` to PATH to ensure `mpicc` is available
+- Dedalus will be compiled with `CC=mpicc` to link against your custom MPI
+
+</Steps>
+
+<Note>
+FTTW from conda is compiled with OpenMPI support. If you use a custom non-OpenMPI implementation, you should also use custom FFTW to avoid compatibility issues.
+</Note>
+
+## Using Custom FFTW
+
+<Steps>
+
+### Locate Your FFTW Installation
+
+Find your FFTW prefix directory:
+
+```bash
+find /usr/local -name "libfftw3*.so" 2>/dev/null
+# Example: /usr/local/fftw/lib/libfftw3.so
+# FFTW_PATH would be: /usr/local/fftw
+```
+
+### Configure the Build Script
+
+```bash
+INSTALL_FFTW=0
+export FFTW_PATH=/usr/local/fftw
+```
+
+### FFTW Linking Behavior
+
+The script automatically adjusts FFTW linking based on your BLAS choice:
+
+- **OpenBLAS**: Dynamic linking (`FFTW_STATIC=0`)
+- **MKL**: Static linking (`FFTW_STATIC=1`) to avoid symbol conflicts with MKL
+
+</Steps>
+
+<Warning>
+Ensure your custom FFTW is compiled with the same MPI implementation you're using. MPI-enabled FFTW built with OpenMPI will not work with Intel MPI.
+</Warning>
+
+## Using Custom HDF5
+
+<Steps>
+
+### Locate Your HDF5 Installation
+
+Find your HDF5 prefix and determine if it has parallel support:
+
+```bash
+which h5pcc  # If this exists, you have parallel HDF5
+# Find prefix:
+/path/to/h5pcc -show | grep -o '\-L[^ ]*' | head -1
+```
+
+### Configure the Build Script
+
+For **parallel HDF5** (recommended for HPC):
+
+```bash
+INSTALL_HDF5=0
+export HDF5_DIR=/usr/local/hdf5-parallel
+export HDF5_MPI="ON"
+```
+
+For **serial HDF5**:
+
+```bash
+INSTALL_HDF5=0
+export HDF5_DIR=/usr/local/hdf5
+# Do not set HDF5_MPI or set to "OFF"
+```
+
+### What Happens
+
+- The script will NOT install HDF5 from conda
+- `h5py` will be built from source using pip with `--no-binary=h5py`
+- If `HDF5_MPI="ON"`, h5py is built with `CC=mpicc` for parallel support
+- h5py will link against your custom HDF5 library
+
+</Steps>
+
+<Info>
+Parallel HDF5 must be built with the same MPI implementation you're using for Dedalus. If your HDF5 was built with Intel MPI, Dedalus must also use Intel MPI.
+</Info>
+
+## Complete Custom Build Example
+
+Here's a complete example for an HPC cluster using Intel MPI and vendor-provided libraries:
+
+```bash
+# Load required modules (example)
+module load intel-mpi/2021.5
+module load fftw/3.3.10-intel-mpi
+module load hdf5/1.12.1-intel-mpi
+
+# Get library paths from modules
+export MPI_PATH=$I_MPI_ROOT
+export FFTW_PATH=/sw/fftw/3.3.10-intel-mpi
+export HDF5_DIR=/sw/hdf5/1.12.1-intel-mpi
+export HDF5_MPI="ON"
+
+# Edit conda_install_dedalus3.sh:
+INSTALL_MPI=0
+INSTALL_FFTW=0
+INSTALL_HDF5=0
+
+# Run the installation
+bash conda_install_dedalus3.sh
+```
+
+## Validation
+
+After installation, verify your custom libraries are properly linked:
+
+<CodeGroup>
+
+```bash MPI Validation
+conda activate dedalus3
+python3 -c "import mpi4py; print(mpi4py.get_config())"
+# Should show your custom MPI paths
+```
+
+```bash HDF5 Validation
+python3 -c "import h5py; print(h5py.version.hdf5_version)"
+python3 -c "import h5py; print(h5py.get_config())"
+```
+
+```bash Full Dedalus Test
+python3 -m dedalus test
+# Should complete successfully
+```
+
+</CodeGroup>
+
+## Platform-Specific Considerations
+
+<Accordion title="Linux HPC Clusters">
+
+- Always use environment modules to load consistent library versions
+- Check with system administrators for recommended MPI implementations
+- Many clusters use Cray MPICH, Intel MPI, or MVAPICH2
+- Ensure your libraries are compiled for the correct CPU architecture (e.g., Haswell, Skylake)
+
+</Accordion>
+
+<Accordion title="macOS">
+
+- Custom MPI builds on macOS can be complex due to Accelerate framework
+- Conda-forge builds are generally recommended for macOS
+- If using custom libraries, ensure they're compiled for the same architecture (x86_64 or arm64)
+- Note: FFTW from conda with custom MPI only works well with OpenMPI-compatible MPIs
+
+</Accordion>
+
+<Accordion title="Apple Silicon (M1/M2/M3)">
+
+- The script defaults to x86_64 builds via Rosetta (`APPLE_SILICON_BUILD_ARM=0`)
+- Native arm64 builds may have issues with certain library versions
+- Custom libraries on Apple Silicon require careful architecture matching
+- Consider using conda-forge builds unless you have specific arm64-optimized libraries
+
+</Accordion>
+
+## Troubleshooting Custom Builds
+
+<Accordion title="mpicc not found during installation">
+
+**Error:**
+```
+ERROR: mpicc: command not found
+```
+
+**Solution:**
+- Verify `MPI_PATH` points to the correct prefix
+- Ensure `${MPI_PATH}/bin/mpicc` exists
+- Check that environment modules are loaded before running the script
+
+</Accordion>
+
+<Accordion title="Library linking errors during pip install">
+
+**Error:**
+```
+ld: library not found for -lfftw3
+```
+
+**Solution:**
+- Verify library paths are correct
+- Add library paths to `LD_LIBRARY_PATH` (Linux) or `DYLD_LIBRARY_PATH` (macOS):
+  ```bash
+  export LD_LIBRARY_PATH=${FFTW_PATH}/lib:${HDF5_DIR}/lib:${MPI_PATH}/lib:$LD_LIBRARY_PATH
+  ```
+
+</Accordion>
+
+<Accordion title="MPI version mismatch">
+
+**Symptoms:**
+- Segmentation faults during parallel runs
+- MPI initialization errors
+
+**Solution:**
+- Ensure ALL components (mpi4py, h5py, FFTW, Dedalus) use the same MPI implementation
+- Do not mix OpenMPI and Intel MPI
+- Rebuild all components if you change MPI implementations
+
+</Accordion>
+
+## Next Steps
+
+- Review [Troubleshooting](/advanced/troubleshooting) for common installation issues
+- Check [CI/CD Workflows](/advanced/ci-cd) to see how builds are tested
+- Return to [Installation Methods](/installation-methods) for standard conda-forge builds

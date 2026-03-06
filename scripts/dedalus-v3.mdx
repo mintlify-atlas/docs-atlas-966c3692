@@ -1,0 +1,365 @@
+---
+title: "Dedalus v3 Installation Script"
+description: "Complete guide to installing Dedalus v3 development version using the conda_install_dedalus3.sh build script"
+---
+
+## Overview
+
+The `conda_install_dedalus3.sh` script automates the installation of Dedalus v3 (development version), a spectral PDE solver framework, using conda package management. This script installs the latest development code from the GitHub repository rather than a stable release.
+
+## What It Does
+
+The script performs the following operations:
+
+1. Validates that the conda base environment is active
+2. Checks configuration requirements (custom library paths if not using conda packages)
+3. Creates or updates a conda environment (default: `dedalus3`)
+4. Configures conda-forge as the primary package channel
+5. Installs Python and build tools (pip, wheel, setuptools, cython)
+6. Installs BLAS libraries (OpenBLAS or MKL) with numpy and scipy
+7. Installs MPI implementation (OpenMPI from conda or custom)
+8. Installs FFTW library (from conda or custom)
+9. Installs HDF5 and h5py (with parallel support if using MPI)
+10. Installs additional dependencies (docopt, matplotlib)
+11. Installs Dedalus v3 from GitHub master branch via pip
+12. Configures threading environment variables
+
+## Prerequisites
+
+<Steps>
+  <Step title="Install Conda">
+    Install Miniconda or Anaconda distribution. Download from:
+    - Miniconda: https://docs.conda.io/en/latest/miniconda.html
+    - Anaconda: https://www.anaconda.com/products/distribution
+  </Step>
+
+  <Step title="Activate Base Environment">
+    The script must be run with the conda base environment active:
+    ```bash
+    conda activate base
+    ```
+  </Step>
+
+  <Step title="Git Access">
+    Ensure you have network access to GitHub for downloading the development version.
+  </Step>
+
+  <Step title="Custom Libraries (Optional)">
+    If using custom MPI, FFTW, or HDF5 installations instead of conda packages, ensure these libraries are properly installed and accessible on your system.
+  </Step>
+</Steps>
+
+<Warning>
+  This script installs the development version of Dedalus from the master branch. For production use, consider using the [Dedalus v2 script](/scripts/dedalus-v2) which installs stable releases.
+</Warning>
+
+## Usage
+
+### Basic Installation
+
+For a standard installation with all dependencies from conda:
+
+```bash
+# Download the script
+wget https://raw.githubusercontent.com/DedalusProject/dedalus/master/conda_install_dedalus3.sh
+
+# Make it executable
+chmod +x conda_install_dedalus3.sh
+
+# Activate conda base environment
+conda activate base
+
+# Run the script
+./conda_install_dedalus3.sh
+```
+
+### Custom Configuration
+
+Edit the script before running to customize the installation:
+
+<CodeGroup>
+```bash Custom Environment Name
+# Modify at the top of the script
+CONDA_ENV="dedalus_dev"
+```
+
+```bash Custom MPI
+# Disable conda MPI and specify custom path
+INSTALL_MPI=0
+export MPI_PATH=/usr/local/openmpi
+```
+
+```bash Custom FFTW
+# Disable conda FFTW and specify custom path
+INSTALL_FFTW=0
+export FFTW_PATH=/usr/local/fftw
+```
+
+```bash Custom HDF5
+# Disable conda HDF5 and specify custom path
+INSTALL_HDF5=0
+export HDF5_DIR=/usr/local/hdf5
+export HDF5_MPI="ON"  # Set to ON if HDF5 has parallel support
+```
+
+```bash MKL BLAS
+# Use Intel MKL instead of OpenBLAS
+BLAS="mkl"
+```
+
+```bash Different Python Version
+# Specify Python version
+PYTHON_VERSION="3.11"
+```
+</CodeGroup>
+
+## Configuration Options
+
+See the [Script Options](/scripts/script-options) page for detailed documentation of all configurable parameters.
+
+### Key Options Summary
+
+- **CONDA_ENV**: Name of the conda environment (default: `dedalus3`)
+- **INSTALL_MPI**: Install OpenMPI from conda (1) or use custom (0)
+- **INSTALL_FFTW**: Install FFTW from conda (1) or use custom (0)
+- **INSTALL_HDF5**: Install HDF5 from conda (1) or use custom (0)
+- **BLAS**: BLAS library choice: `openblas` or `mkl`
+- **PYTHON_VERSION**: Python version to install (default: `3.12`)
+- **APPLE_SILICON_BUILD_ARM**: Native arm64 on Apple Silicon (default: 0)
+
+## Platform-Specific Behavior
+
+### Apple Silicon (M1/M2/M3)
+
+By default, the script installs x86_64 packages via Rosetta 2 emulation on Apple Silicon Macs:
+
+```bash
+# Default behavior on Apple Silicon
+APPLE_SILICON_BUILD_ARM=0  # Uses osx-64 architecture
+```
+
+This provides better compatibility with scientific computing libraries. To use native arm64 builds:
+
+```bash
+APPLE_SILICON_BUILD_ARM=1  # Uses osx-arm64 architecture
+```
+
+<Note>
+  Native arm64 builds may exhibit numerical errors with certain OpenBLAS versions. The script automatically pins `libopenblas<0.3.20` when using arm64 builds to avoid known issues with the `ggev` function.
+</Note>
+
+### Linux
+
+On Linux systems, the script uses the native architecture (typically `linux-64`).
+
+## Installation Flow
+
+<Steps>
+  <Step title="Environment Setup">
+    The script sources conda configuration and sets Python environment variables:
+    - `PYTHONNOUSERSITE=1`: Prevents conda from looking in `~/.local`
+    - Unsets `PYTHONPATH`: Ensures clean environment
+  </Step>
+
+  <Step title="Environment Creation">
+    Creates a new conda environment or warns if it already exists. On Apple Silicon with `APPLE_SILICON_BUILD_ARM=0`, sets the environment to use `osx-64` packages.
+  </Step>
+
+  <Step title="Channel Configuration">
+    Adds conda-forge as a channel and sets strict channel priority to ensure consistent package sources.
+  </Step>
+
+  <Step title="Base Python Stack">
+    Installs Python with essential build tools (pip, wheel, setuptools, cython).
+  </Step>
+
+  <Step title="BLAS and Scientific Python">
+    Installs either OpenBLAS or MKL along with numpy and scipy. Sets `FFTW_STATIC` based on BLAS choice:
+    - OpenBLAS: Dynamic FFTW linking
+    - MKL: Static FFTW linking to avoid symbol conflicts
+  </Step>
+
+  <Step title="MPI Installation">
+    If `INSTALL_MPI=1`: Installs conda-forge compilers, OpenMPI, and mpi4py.
+    
+    If `INSTALL_MPI=0`: Adds custom MPI to PATH and installs mpi4py via pip.
+  </Step>
+
+  <Step title="FFTW Installation">
+    If `INSTALL_FFTW=1`: Installs FFTW from conda-forge with OpenMPI support.
+    
+    If `INSTALL_FFTW=0`: Uses custom FFTW specified in `FFTW_PATH`.
+  </Step>
+
+  <Step title="HDF5 Installation">
+    If `INSTALL_HDF5=1`: Installs HDF5 and h5py from conda-forge. Uses parallel versions if MPI is installed from conda.
+    
+    If `INSTALL_HDF5=0`: Installs h5py via pip, building against custom HDF5. Sets `CC=mpicc` for parallel builds.
+  </Step>
+
+  <Step title="Additional Dependencies">
+    Installs docopt and matplotlib from conda-forge.
+  </Step>
+
+  <Step title="Dedalus v3 Installation">
+    Installs Dedalus v3 development version from GitHub master branch using pip with `CC=mpicc` for proper MPI linking:
+    ```bash
+    CC=mpicc python3 -m pip install --no-cache --no-build-isolation \
+      http://github.com/dedalusproject/dedalus/zipball/master/
+    ```
+  </Step>
+
+  <Step title="Threading Configuration">
+    Sets environment variables to disable threading by default:
+    - `OMP_NUM_THREADS=1`
+    - `NUMEXPR_MAX_THREADS=1`
+  </Step>
+</Steps>
+
+## Environment Variables Set
+
+The script configures the following environment variables in the conda environment:
+
+<ParamField path="OMP_NUM_THREADS" type="string" default="1">
+  OpenMP thread count. Set to 1 to disable threading by default.
+</ParamField>
+
+<ParamField path="NUMEXPR_MAX_THREADS" type="string" default="1">
+  NumExpr maximum thread count. Set to 1 to disable threading by default.
+</ParamField>
+
+<ParamField path="PYTHONNOUSERSITE" type="string" default="1">
+  Prevents Python from adding user site-packages to sys.path during installation.
+</ParamField>
+
+<ParamField path="FFTW_STATIC" type="string">
+  Controls FFTW linking mode:
+  - `0`: Dynamic linking (with OpenBLAS)
+  - `1`: Static linking (with MKL to avoid symbol conflicts)
+</ParamField>
+
+## Activating the Environment
+
+After installation completes:
+
+```bash
+# Activate the environment
+conda activate dedalus3
+
+# Verify installation
+python -c "import dedalus; print(dedalus.__version__)"
+
+# Test MPI functionality
+mpiexec -n 4 python -c "from mpi4py import MPI; print(f'Rank {MPI.COMM_WORLD.rank}')"
+```
+
+## Updating the Development Version
+
+Since this script installs from the master branch, you can update to the latest development code:
+
+```bash
+# Activate the environment
+conda activate dedalus3
+
+# Update Dedalus to latest master
+CC=mpicc pip install --no-cache --no-build-isolation --upgrade \
+  http://github.com/dedalusproject/dedalus/zipball/master/
+```
+
+<Info>
+  The `--no-cache` flag ensures pip downloads the latest version from GitHub rather than using a cached copy.
+</Info>
+
+## Troubleshooting
+
+### Environment Already Exists
+
+If the conda environment already exists, the script will prompt:
+
+```
+WARNING: Conda environment 'dedalus3' already exists
+Proceed ([y]/n)?
+```
+
+Respond with `y` to continue installation into the existing environment, or `n` to abort.
+
+### Custom Library Path Errors
+
+If using custom MPI, FFTW, or HDF5 installations:
+
+```
+ERROR: MPI_PATH must be set
+ERROR: FFTW_PATH must be set
+ERROR: HDF5_DIR must be set
+```
+
+Ensure the corresponding environment variables are exported before running the script.
+
+### Base Environment Not Active
+
+```
+ERROR: Conda base environment must be activated
+```
+
+Run `conda activate base` before executing the script.
+
+### GitHub Download Failures
+
+If the script fails to download from GitHub:
+
+```
+ERROR: Could not find a version that satisfies the requirement
+```
+
+Check your network connection and ensure you can access https://github.com. You may also try using the direct GitHub URL with `.git`:
+
+```bash
+pip install git+https://github.com/dedalusproject/dedalus.git
+```
+
+## Development Workflow
+
+For active development on Dedalus:
+
+<Steps>
+  <Step title="Clone Repository">
+    ```bash
+    git clone https://github.com/dedalusproject/dedalus.git
+    cd dedalus
+    ```
+  </Step>
+
+  <Step title="Create Environment">
+    Run the installation script to set up dependencies, or create the environment first and install Dedalus separately.
+  </Step>
+
+  <Step title="Install in Editable Mode">
+    ```bash
+    conda activate dedalus3
+    CC=mpicc pip install -e .
+    ```
+    This allows you to modify the code without reinstalling.
+  </Step>
+</Steps>
+
+## Differences from Dedalus v2 Script
+
+The key difference between v2 and v3 scripts is the Dedalus installation source:
+
+| Feature | v2 Script | v3 Script |
+|---------|-----------|------------|
+| Default environment name | `dedalus2` | `dedalus3` |
+| Dedalus source | PyPI stable release (`dedalus==2.*`) | GitHub master branch |
+| Update frequency | Occasional stable releases | Latest development code |
+| Stability | Production-ready | Development/experimental |
+| Installation command | `pip install dedalus==2.*` | `pip install http://github.com/.../master/` |
+
+All other configuration options and installation steps are identical between the two scripts.
+
+## Additional Resources
+
+- [Dedalus Project Documentation](https://dedalus-project.readthedocs.io/)
+- [Dedalus GitHub Repository](https://github.com/dedalusproject/dedalus)
+- [Dedalus v3 Migration Guide](https://dedalus-project.readthedocs.io/en/latest/pages/migrating.html)
+- [Conda Documentation](https://docs.conda.io/)
+- [conda-forge Channel](https://conda-forge.org/)

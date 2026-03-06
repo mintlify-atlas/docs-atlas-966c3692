@@ -1,0 +1,130 @@
+---
+title: Introduction
+description: Learn about Dedalus Conda build scripts for installing the Dedalus spectral PDE solver with custom library support
+---
+
+## What is Dedalus Conda?
+
+Dedalus Conda provides build scripts for installing the [Dedalus spectral PDE solver](https://dedalus-project.org/) using Conda package management. These scripts enable flexible installation options, allowing you to use either pre-built packages from conda-forge or custom builds linked to system-specific libraries.
+
+Dedalus is a flexible framework for solving partial differential equations using modern spectral methods. It's widely used in fluid dynamics, astrophysics, and other computational physics domains.
+
+## Why Use These Build Scripts?
+
+While Dedalus is available directly from conda-forge, the custom build scripts in this repository offer several advantages:
+
+<CardGroup cols={2}>
+  <Card title="Custom Library Support" icon="link">
+    Link to system-specific MPI, FFTW, or HDF5 libraries optimized for your cluster or workstation
+  </Card>
+  <Card title="Version Flexibility" icon="code-branch">
+    Install Dedalus v2 (stable) or v3 (development) with dedicated build scripts
+  </Card>
+  <Card title="HPC Optimization" icon="server">
+    Configure builds for high-performance computing environments with custom MPI implementations
+  </Card>
+  <Card title="BLAS Options" icon="sliders">
+    Choose between OpenBLAS or Intel MKL for optimized linear algebra operations
+  </Card>
+</CardGroup>
+
+## Key Features
+
+### Flexible Dependency Management
+
+The build scripts provide granular control over key dependencies:
+
+- **MPI**: Install OpenMPI from conda or link to custom MPI installations (MPICH, Intel MPI, etc.)
+- **FFTW**: Use conda-forge FFTW or link to system-optimized builds
+- **HDF5**: Choose between parallel or serial HDF5, from conda or custom installations
+- **BLAS**: Select OpenBLAS or Intel MKL for numerical computations
+
+### Platform Support
+
+The scripts are tested nightly via GitHub Actions on:
+
+- **Linux** (x86_64)
+- **macOS** (x86_64)
+- **Apple Silicon** (with x86_64 emulation support)
+
+<Note>
+Native ARM64 builds on Apple Silicon are available but may exhibit numerical errors in some configurations. The default behavior uses x86_64 emulation via Rosetta 2.
+</Note>
+
+### Python Version Control
+
+Configure the Python version for your environment (default: Python 3.12), ensuring compatibility with your existing scientific Python stack.
+
+## Use Cases
+
+### Research Workstations
+
+For laptops and individual workstations, the conda-forge installation provides the quickest path to a working Dedalus environment without requiring custom library configurations.
+
+### HPC Clusters
+
+On supercomputers and research clusters, custom build scripts allow you to:
+
+- Link to cluster-optimized MPI libraries (e.g., Cray MPICH, Intel MPI)
+- Use system-installed FFTW with hardware-specific optimizations
+- Integrate with parallel HDF5 builds tuned for cluster filesystems
+- Match the cluster's existing module environment
+
+### Development Environments
+
+Developers working on Dedalus itself or building custom PDE solvers can use these scripts to:
+
+- Install development versions (v3-master branch)
+- Test against different dependency configurations
+- Reproduce build environments across different systems
+
+## Architecture Overview
+
+The repository provides two main installation scripts:
+
+```bash
+conda_install_dedalus2.sh  # Dedalus v2 (stable release)
+conda_install_dedalus3.sh  # Dedalus v3 (development)
+```
+
+Both scripts follow the same structure:
+
+<Steps>
+  <Step title="Environment Setup">
+    Create a new conda environment with configurable options
+  </Step>
+  <Step title="Dependency Installation">
+    Install or link MPI, FFTW, HDF5, and numerical libraries based on configuration
+  </Step>
+  <Step title="Python Stack">
+    Install NumPy, SciPy, and other Python dependencies from conda-forge
+  </Step>
+  <Step title="Dedalus Installation">
+    Build and install Dedalus from PyPI (v2) or GitHub (v3) with proper MPI linking
+  </Step>
+  <Step title="Environment Configuration">
+    Set threading environment variables for optimal performance
+  </Step>
+</Steps>
+
+## Threading Configuration
+
+The build scripts automatically configure threading settings to prevent oversubscription:
+
+```bash
+OMP_NUM_THREADS=1
+NUMEXPR_MAX_THREADS=1
+```
+
+These settings are essential for MPI-parallel runs where thread-level parallelism can interfere with process-level parallelism.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get Dedalus running in minutes with the quickstart guide
+  </Card>
+  <Card title="Installation Methods" icon="download" href="/installation-methods">
+    Compare conda-forge vs custom builds and choose the right approach
+  </Card>
+</CardGroup>

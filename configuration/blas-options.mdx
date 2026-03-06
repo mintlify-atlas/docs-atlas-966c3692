@@ -1,0 +1,313 @@
+---
+title: BLAS Configuration
+description: Choose between OpenBLAS and Intel MKL for linear algebra operations in Dedalus builds
+---
+
+## Overview
+
+BLAS (Basic Linear Algebra Subprograms) provides the fundamental linear algebra operations used by NumPy, SciPy, and Dedalus. The build scripts support two BLAS implementations: OpenBLAS and Intel MKL.
+
+## Configuration Option
+
+### BLAS
+
+<ParamField path="BLAS" type="string" default="openblas">
+  Selects the BLAS implementation for NumPy and SciPy.
+  
+  **Valid values:**
+  - `"openblas"` - Open source BLAS implementation (default)
+  - `"mkl"` - Intel Math Kernel Library
+</ParamField>
+
+## BLAS Implementations
+
+<Tabs>
+  <Tab title="OpenBLAS">
+    OpenBLAS is the default BLAS implementation. It's open source, well-supported on all platforms, and works well for most use cases.
+
+    ```bash
+    BLAS="openblas"
+    ```
+
+    ### Installation Process
+
+    From the build script:
+
+    ```bash conda_install_dedalus3.sh
+    case "${BLAS}" in
+    "openblas")
+        echo "Installing conda-forge openblas, numpy, scipy"
+        # Pin openblas on apple silicon since 0.3.20 causes ggev errors
+        if [ ${APPLE_SILICON_BUILD_ARM} -eq 1 ]
+        then
+            conda install "${CARGS[@]}" "libopenblas<0.3.20"
+        fi
+        conda install "${CARGS[@]}" "libblas=*=*openblas" numpy scipy
+        # Dynamically link FFTW
+        export FFTW_STATIC=0
+    ```
+
+    ### Key Features
+
+    - **Dynamic FFTW linking**: Sets `FFTW_STATIC=0`
+    - **Apple Silicon compatibility**: Pins `libopenblas<0.3.20` to avoid ggev errors
+    - **Cross-platform**: Works consistently on Linux, macOS, and Windows
+    - **No licensing restrictions**: Fully open source
+
+    <Info>
+    On Apple Silicon (M1/M2/M3), OpenBLAS versions >= 0.3.20 can cause errors in generalized eigenvalue problems. The build script automatically pins to earlier versions when building native arm64.
+    </Info>
+  </Tab>
+
+  <Tab title="Intel MKL">
+    Intel MKL (Math Kernel Library) is Intel's optimized BLAS implementation. It can offer better performance on Intel CPUs.
+
+    ```bash
+    BLAS="mkl"
+    ```
+
+    ### Installation Process
+
+    From the build script:
+
+    ```bash conda_install_dedalus3.sh
+    "mkl")
+        echo "Installing conda-forge mkl, numpy, scipy"
+        conda install "${CARGS[@]}" "libblas=*=*mkl" numpy scipy
+        # Statically link FFTW to avoid MKL symbols
+        export FFTW_STATIC=1
+    ```
+
+    ### Key Features
+
+    - **Static FFTW linking**: Sets `FFTW_STATIC=1` to avoid symbol conflicts
+    - **Optimized for Intel**: Best performance on Intel CPUs
+    - **Threading control**: Can leverage Intel's threading libraries
+    - **Available via conda-forge**: No separate license needed for conda distribution
+
+    <Warning>
+    When using MKL, FFTW is statically linked (`FFTW_STATIC=1`) to prevent symbol conflicts between FFTW and MKL's FFT routines.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## FFTW Linking Implications
+
+Your BLAS choice affects how FFTW is linked:
+
+<CodeGroup>
+
+```bash OpenBLAS → Dynamic FFTW
+# With OpenBLAS, FFTW is dynamically linked
+BLAS="openblas"
+# Automatically sets: FFTW_STATIC=0
+```
+
+```bash MKL → Static FFTW
+# With MKL, FFTW is statically linked
+BLAS="mkl"
+# Automatically sets: FFTW_STATIC=1
+```
+
+</CodeGroup>
+
+### Why Static Linking with MKL?
+
+MKL includes its own FFT routines. Statically linking FFTW prevents symbol conflicts between FFTW and MKL at runtime.
+
+## Performance Considerations
+
+### OpenBLAS
+
+**Advantages:**
+- Consistent performance across platforms
+- No licensing concerns
+- Well-tested with Dedalus
+- Good performance on AMD CPUs
+
+**Best for:**
+- AMD processors
+- ARM processors (including Apple Silicon)
+- Cross-platform development
+- Open source requirements
+
+### Intel MKL
+
+**Advantages:**
+- Highly optimized for Intel CPUs
+- May offer better performance on Intel hardware
+- Extensive optimization for Intel architectures
+
+**Best for:**
+- Intel processors (especially Xeon)
+- Maximum performance on Intel hardware
+- Users familiar with MKL tuning
+
+<Note>
+In practice, the performance difference between OpenBLAS and MKL for Dedalus workloads is often modest. OpenBLAS is the recommended default unless you have specific performance requirements or Intel hardware.
+</Note>
+
+## Platform-Specific Guidance
+
+### Apple Silicon (M1/M2/M3)
+
+```bash
+# Recommended for Apple Silicon
+BLAS="openblas"
+# Build script automatically pins libopenblas<0.3.20
+```
+
+OpenBLAS is the better choice for Apple Silicon, with automatic version pinning to avoid known issues.
+
+### Intel x86_64 Workstations
+
+```bash
+# Either works well
+BLAS="openblas"  # Default, reliable
+# or
+BLAS="mkl"       # May be faster
+```
+
+Both options work well. Try MKL if you want to squeeze out extra performance.
+
+### AMD Processors
+
+```bash
+# Recommended for AMD
+BLAS="openblas"
+```
+
+OpenBLAS is optimized for AMD processors and is the recommended choice.
+
+### HPC Clusters
+
+```bash
+# Check what's optimized for your cluster
+BLAS="openblas"  # Safe default
+# or
+BLAS="mkl"       # If Intel hardware
+```
+
+Consult your HPC documentation. Some clusters have optimized builds of either library.
+
+## Validation
+
+The build script validates the BLAS choice:
+
+```bash conda_install_dedalus3.sh
+*)
+    >&2 echo "ERROR: BLAS must be 'openblas' or 'mkl'"
+    exit 1
+    ;;
+esac
+```
+
+<Warning>
+The BLAS option must be exactly `"openblas"` or `"mkl"`. Any other value will cause the build to fail.
+</Warning>
+
+## Verifying Your BLAS
+
+After installation, you can check which BLAS is in use:
+
+```bash
+# Activate your environment
+conda activate dedalus3
+
+# Check NumPy configuration
+python3 -c "import numpy; numpy.show_config()"
+
+# Look for lines like:
+# blas_mkl_info:
+# or
+# openblas_info:
+```
+
+## Threading Configuration
+
+Both BLAS implementations support multi-threading, but the build scripts disable threading by default:
+
+```bash conda_install_dedalus3.sh
+echo "Disabled threading by default in the environment"
+conda env config vars set OMP_NUM_THREADS=1
+conda env config vars set NUMEXPR_MAX_THREADS=1
+```
+
+This is appropriate for MPI-parallel runs where each process should use a single thread. For single-process runs, you may want to enable threading:
+
+```bash
+# Enable threading for single-process runs
+export OMP_NUM_THREADS=8
+export NUMEXPR_MAX_THREADS=8
+```
+
+## Common Patterns
+
+<CodeGroup>
+
+```bash Default configuration
+# Recommended for most users
+BLAS="openblas"
+INSTALL_MPI=1
+INSTALL_FFTW=1
+INSTALL_HDF5=1
+```
+
+```bash Intel optimization
+# For Intel CPUs
+BLAS="mkl"
+INSTALL_MPI=1
+INSTALL_FFTW=1
+INSTALL_HDF5=1
+```
+
+```bash Apple Silicon
+# For M1/M2/M3 Macs
+BLAS="openblas"
+APPLE_SILICON_BUILD_ARM=1
+# or
+APPLE_SILICON_BUILD_ARM=0  # For x86_64 emulation
+```
+
+</CodeGroup>
+
+## Related Configuration
+
+- [FFTW Configuration](/configuration/fftw-setup) - BLAS choice affects FFTW linking
+- [Apple Silicon Configuration](/configuration/apple-silicon) - Platform-specific BLAS considerations
+
+## Troubleshooting
+
+### Symbol conflicts with MKL
+
+If you see FFT-related errors with MKL:
+
+```bash
+# Ensure FFTW is statically linked
+BLAS="mkl"
+# FFTW_STATIC=1 is set automatically
+```
+
+### Performance issues
+
+If BLAS operations seem slow:
+
+```bash
+# Check if threading is appropriate for your use case
+# For MPI: threading should be off (default)
+echo $OMP_NUM_THREADS  # Should be 1
+
+# For single-process: enable threading
+export OMP_NUM_THREADS=$(nproc)
+```
+
+### Apple Silicon ggev errors
+
+If you encounter generalized eigenvalue errors on Apple Silicon:
+
+```bash
+# Ensure OpenBLAS is pinned correctly
+BLAS="openblas"
+APPLE_SILICON_BUILD_ARM=1
+# Build script will pin libopenblas<0.3.20
+```

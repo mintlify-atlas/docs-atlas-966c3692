@@ -1,0 +1,271 @@
+---
+title: FFTW Configuration
+description: Configure FFTW (Fastest Fourier Transform in the West) library installation and linking options for Dedalus builds
+---
+
+## Overview
+
+FFTW (Fastest Fourier Transform in the West) is a critical dependency for Dedalus spectral methods. The build scripts allow you to install FFTW from conda-forge or link to a custom FFTW installation.
+
+## Configuration Options
+
+### INSTALL_FFTW
+
+<ParamField path="INSTALL_FFTW" type="integer" default="1">
+  Controls whether to install FFTW from conda-forge.
+  
+  **Valid values:**
+  - `1` - Install FFTW from conda-forge (default)
+  - `0` - Use custom FFTW installation (requires FFTW_PATH)
+</ParamField>
+
+### FFTW_PATH
+
+<ParamField path="FFTW_PATH" type="string" required="when INSTALL_FFTW=0">
+  Path to your custom FFTW installation prefix.
+  
+  Must be set when `INSTALL_FFTW=0`. The build will link against FFTW libraries in this location.
+</ParamField>
+
+### FFTW_STATIC
+
+<ParamField path="FFTW_STATIC" type="integer" automatic>
+  Controls whether to statically link FFTW.
+  
+  **Automatically set based on BLAS choice:**
+  - `0` - Dynamic linking (when `BLAS="openblas"`)
+  - `1` - Static linking (when `BLAS="mkl"`)
+  
+  You typically should not set this manually.
+</ParamField>
+
+## Installation Modes
+
+<Tabs>
+  <Tab title="FFTW from conda">
+    The default configuration installs FFTW from conda-forge, specifically the OpenMPI variant.
+
+    ```bash
+    # Default configuration
+    INSTALL_FFTW=1
+    ```
+
+    From the build script:
+    ```bash conda_install_dedalus3.sh
+    if [ ${INSTALL_FFTW} -eq 1 ]
+    then
+        echo "Installing conda-forge fftw"
+        # no-deps to avoid pulling openmpi
+        conda install "${CARGS[@]}" --no-deps "fftw=*=*openmpi*"
+    ```
+
+    The `--no-deps` flag prevents conda from pulling OpenMPI as a dependency, allowing the script to manage MPI separately.
+  </Tab>
+
+  <Tab title="Custom FFTW">
+    Use a custom FFTW installation when you need to link to system-specific builds.
+
+    ```bash
+    # Custom FFTW configuration
+    INSTALL_FFTW=0
+    export FFTW_PATH="/opt/fftw/3.3.10"
+    ```
+
+    From the build script:
+    ```bash conda_install_dedalus3.sh
+    else
+        echo "Not installing fftw"
+    fi
+    ```
+
+    The build will use `FFTW_PATH` when compiling Dedalus.
+  </Tab>
+</Tabs>
+
+## FFTW Linking Behavior
+
+The `FFTW_STATIC` variable is automatically set based on your BLAS configuration:
+
+### With OpenBLAS (Dynamic Linking)
+
+```bash conda_install_dedalus3.sh
+case "${BLAS}" in
+"openblas")
+    echo "Installing conda-forge openblas, numpy, scipy"
+    # Pin openblas on apple silicon since 0.3.20 causes ggev errors
+    if [ ${APPLE_SILICON_BUILD_ARM} -eq 1 ]
+    then
+        conda install "${CARGS[@]}" "libopenblas<0.3.20"
+    fi
+    conda install "${CARGS[@]}" "libblas=*=*openblas" numpy scipy
+    # Dynamically link FFTW
+    export FFTW_STATIC=0
+```
+
+With OpenBLAS, FFTW is dynamically linked.
+
+### With MKL (Static Linking)
+
+```bash conda_install_dedalus3.sh
+"mkl")
+    echo "Installing conda-forge mkl, numpy, scipy"
+    conda install "${CARGS[@]}" "libblas=*=*mkl" numpy scipy
+    # Statically link FFTW to avoid MKL symbols
+    export FFTW_STATIC=1
+```
+
+<Info>
+Static linking is used with MKL to avoid symbol conflicts between FFTW and MKL libraries.
+</Info>
+
+## Validation
+
+The build script validates FFTW configuration:
+
+```bash conda_install_dedalus3.sh
+if [ ${INSTALL_FFTW} -ne 1 ]
+then
+    if [ -z ${FFTW_PATH} ]
+    then
+        >&2 echo "ERROR: FFTW_PATH must be set"
+        exit 1
+    else
+        echo "FFTW_PATH set to '${FFTW_PATH}'"
+    fi
+fi
+```
+
+<Warning>
+When `INSTALL_FFTW=0`, you **must** set `FFTW_PATH` or the build will fail.
+</Warning>
+
+## MPI Compatibility
+
+<Note>
+**Important compatibility note from the build script:**
+
+```bash
+# Note: FFTW from conda will likely only work with custom MPIs that are OpenMPI
+```
+
+The conda-forge FFTW package is built against OpenMPI. If you use a custom MPI implementation that is not OpenMPI-compatible, you should also use a custom FFTW build.
+</Note>
+
+## Platform Considerations
+
+### Standard Conda Build
+
+For most users, the conda-forge FFTW works well:
+
+```bash
+INSTALL_MPI=1      # Use conda OpenMPI
+INSTALL_FFTW=1     # Use conda FFTW (built for OpenMPI)
+```
+
+### HPC Clusters
+
+On HPC systems, you may need to use optimized system libraries:
+
+```bash
+# Use system MPI and FFTW
+INSTALL_MPI=0
+export MPI_PATH="/opt/mpi/openmpi-4.1.4"
+
+INSTALL_FFTW=0
+export FFTW_PATH="/opt/fftw/3.3.10-openmpi"
+```
+
+### Building Custom FFTW
+
+If you need to build FFTW yourself (e.g., for a non-OpenMPI MPI):
+
+```bash
+# Download and build FFTW
+wget http://www.fftw.org/fftw-3.3.10.tar.gz
+tar -xzf fftw-3.3.10.tar.gz
+cd fftw-3.3.10
+
+# Configure with MPI support
+./configure --prefix=/opt/fftw/3.3.10 \
+            --enable-mpi \
+            --enable-openmp \
+            --enable-threads \
+            --enable-shared
+make -j
+make install
+
+# Use in build script
+INSTALL_FFTW=0
+export FFTW_PATH="/opt/fftw/3.3.10"
+```
+
+## Common Patterns
+
+<CodeGroup>
+
+```bash Default conda build
+# Simplest configuration
+INSTALL_MPI=1
+INSTALL_FFTW=1
+BLAS="openblas"
+# FFTW_STATIC will be automatically set to 0
+```
+
+```bash Conda with MKL
+# Using Intel MKL for BLAS
+INSTALL_MPI=1
+INSTALL_FFTW=1
+BLAS="mkl"
+# FFTW_STATIC will be automatically set to 1
+```
+
+```bash HPC cluster
+# System libraries on HPC
+INSTALL_MPI=0
+export MPI_PATH="/opt/mpi/openmpi-4.1.4"
+
+INSTALL_FFTW=0
+export FFTW_PATH="/opt/fftw/3.3.10"
+```
+
+```bash Mixed configuration
+# Conda MPI with custom FFTW
+INSTALL_MPI=1
+
+INSTALL_FFTW=0
+export FFTW_PATH="/usr/local/fftw"
+```
+
+</CodeGroup>
+
+## Related Configuration
+
+- [MPI Configuration](/configuration/mpi-setup) - FFTW compatibility depends on MPI choice
+- [BLAS Options](/configuration/blas-options) - BLAS choice affects FFTW linking
+- [HDF5 Configuration](/configuration/hdf5-setup) - Another key scientific library
+
+## Troubleshooting
+
+### Symbol conflicts with MKL
+
+If you see symbol conflicts between FFTW and MKL:
+
+```bash
+# Ensure FFTW is statically linked when using MKL
+BLAS="mkl"
+INSTALL_FFTW=1
+# FFTW_STATIC=1 will be set automatically
+```
+
+### Custom MPI with conda FFTW
+
+If using custom MPI with conda FFTW fails:
+
+```bash
+# Use custom FFTW built against your MPI
+INSTALL_MPI=0
+export MPI_PATH="/path/to/custom/mpi"
+
+INSTALL_FFTW=0  # Don't use conda FFTW
+export FFTW_PATH="/path/to/fftw/built/with/custom/mpi"
+```

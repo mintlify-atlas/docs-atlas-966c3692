@@ -1,0 +1,68 @@
+{
+  "projectType": "infrastructure",
+  "projectName": "Dedalus Conda",
+  "projectDescription": "Conda build scripts and recipes for installing the Dedalus spectral PDE solver with custom library support",
+  "theme": "aspen",
+  "primaryColor": "#2563eb",
+  "lightColor": "#3b82f6",
+  "darkColor": "#1e40af",
+  "navigation": {
+    "groups": [
+      {
+        "group": "Get Started",
+        "pages": [
+          "introduction",
+          "quickstart",
+          "installation-methods"
+        ]
+      },
+      {
+        "group": "Build Scripts",
+        "pages": [
+          "scripts/dedalus-v2",
+          "scripts/dedalus-v3",
+          "scripts/script-options"
+        ]
+      },
+      {
+        "group": "Configuration",
+        "pages": [
+          "configuration/mpi-setup",
+          "configuration/fftw-setup",
+          "configuration/hdf5-setup",
+          "configuration/blas-options",
+          "configuration/apple-silicon"
+        ]
+      },
+      {
+        "group": "Advanced",
+        "pages": [
+          "advanced/custom-libraries",
+          "advanced/troubleshooting",
+          "advanced/ci-cd"
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Automated Conda environment setup for Dedalus v2 and v3",
+    "Custom MPI/FFTW/HDF5 library linking support",
+    "Conda-forge integration with configurable dependencies",
+    "Multi-platform support (Linux, macOS, Apple Silicon)",
+    "GitHub Actions CI/CD for automated testing"
+  ],
+  "publicApiSurface": [
+    "conda_install_dedalus2.sh",
+    "conda_install_dedalus3.sh",
+    "CONDA_ENV environment variable",
+    "INSTALL_MPI option",
+    "INSTALL_FFTW option",
+    "INSTALL_HDF5 option",
+    "MPI_PATH configuration",
+    "FFTW_PATH configuration",
+    "HDF5_DIR configuration",
+    "BLAS option (openblas/mkl)",
+    "PYTHON_VERSION option",
+    "APPLE_SILICON_BUILD_ARM option"
+  ]
+}
